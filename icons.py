@@ -2,6 +2,7 @@
 """Silah ve bicaklarin 3B modelini ayri sahnede cekip PNG ikon olarak kaydeder."""
 import math
 import os
+import tempfile
 
 from pyray import *
 try:
@@ -105,6 +106,22 @@ def _stale(path):
         return True
 
 
+def _load_texture(path):
+    # Raylib fopen'i Turkce karakterli mutlak yollarda basarisiz oluyor;
+    # dosyayi Python ile okuyup bellekten yukle.
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError:
+        return None
+    img = load_image_from_memory(".png", data, len(data))
+    if img.width <= 0:
+        return None
+    tex = load_texture_from_image(img)
+    unload_image(img)
+    return tex if tex.id else None
+
+
 def _render(parts, path):
     global _rt, _cube, _lit
     cam = _camera(parts)
@@ -130,8 +147,13 @@ def _render(parts, path):
     end_texture_mode()
     img = load_image_from_texture(_rt.texture)
     image_flip_vertical(img)
-    export_image(img, path)
+    tmp = os.path.join(tempfile.gettempdir(), "hexarena_icon.png")
+    export_image(img, tmp)
     unload_image(img)
+    try:
+        os.replace(tmp, path)
+    except OSError:
+        pass
 
 
 def init():
@@ -151,21 +173,23 @@ def init():
         path = _png("weapon", str(wi))
         if _stale(path):
             _render(_gun_parts(wi), path)
-        t = load_texture(path)
-        set_texture_filter(t, TEXTURE_FILTER_BILINEAR)
+        t = _load_texture(path)
+        if t is not None:
+            set_texture_filter(t, TEXTURE_FILTER_BILINEAR)
         _tex[("w", wi)] = t
     for k in knives_mod.KNIVES:
         path = _png("knife", k.kid)
         if _stale(path):
             _render(knives_mod.model(k.kid)[1], path)
-        t = load_texture(path)
-        set_texture_filter(t, TEXTURE_FILTER_BILINEAR)
+        t = _load_texture(path)
+        if t is not None:
+            set_texture_filter(t, TEXTURE_FILTER_BILINEAR)
         _tex[("k", k.kid)] = t
     _ready = True
 
 
 def _draw(tex, x, y, w, h, alpha):
-    if tex is None:
+    if tex is None or tex.id == 0 or tex.width <= 0:
         return False
     dw = w
     dh = dw * IH / IW

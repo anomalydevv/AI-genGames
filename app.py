@@ -26,6 +26,8 @@ def main():
     g.quit = False
 
     while not window_should_close() and not g.quit:
+        if is_key_pressed(KEY_F11) or (is_key_down(KEY_LEFT_ALT) and is_key_pressed(KEY_ENTER)):
+            toggle_fullscreen()
         dt = min(get_frame_time(), 0.05)
         st = g.state
         if st == "play":
@@ -42,6 +44,7 @@ def main():
         begin_drawing()
         clear_background(BLACK)
         render.draw_post()
+        begin_mode_2d(render.ui_camera())
         if st == "main":
             draw_rectangle(0, 0, SW, SH, C(0, 0, 0, 90))
             hud.screen_main()
@@ -66,6 +69,7 @@ def main():
                 hud.pause_ui()
         elif st == "end":
             hud.screen_end()
+        end_mode_2d()
         end_drawing()
         if st != "setup" and g.edit != -1 and g.state != "setup":
             g.edit = -1

@@ -28,6 +28,25 @@ AX_X = Vector3(1, 0, 0)
 AX_Z = Vector3(0, 0, 1)
 _f = _v2 = _v3 = None
 LOCS = {}
+VIEW_SCALE = 1.0
+VIEW_OX = 0.0
+VIEW_OY = 0.0
+
+
+def update_view():
+    global VIEW_SCALE, VIEW_OX, VIEW_OY
+    sw, sh = get_screen_width(), get_screen_height()
+    if sw <= 0 or sh <= 0:
+        sw, sh = SW, SH
+    sc = min(sw / SW, sh / SH)
+    dw, dh = SW * sc, SH * sc
+    VIEW_SCALE, VIEW_OX, VIEW_OY = sc, (sw - dw) * 0.5, (sh - dh) * 0.5
+    ui.set_view(VIEW_SCALE, VIEW_OX, VIEW_OY)
+    return VIEW_SCALE, VIEW_OX, VIEW_OY
+
+
+def ui_camera():
+    return Camera2D(Vector2(VIEW_OX, VIEW_OY), Vector2(0, 0), 0.0, VIEW_SCALE)
 
 
 def init_gfx():
@@ -37,19 +56,28 @@ def init_gfx():
     _v3 = ffi.new("float[3]")
     font = None
     ldir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts")
+    cps = list(range(32, 127)) + [ord(c) for c in "ğüşıöçĞÜŞİÖÇ"]
     for pth in (os.path.join(ldir, "Rajdhani-Regular.ttf"), os.path.join(ldir, "Orbitron.ttf"),
                 "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
                 "/System/Library/Fonts/Supplemental/Arial.ttf", "/Library/Fonts/Arial.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf"):
-        if os.path.exists(pth):
-            try:
-                cps = list(range(32, 127)) + [ord(c) for c in "ğüşıöçĞÜŞİÖÇ"]
-                arr = ffi.new("int[]", cps)
+        if not os.path.exists(pth):
+            continue
+        try:
+            # Raylib mutlak Turkce yolda fopen edemiyor; fontu bellekten yukle.
+            with open(pth, "rb") as f:
+                data = f.read()
+            arr = ffi.new("int[]", cps)
+            ext = os.path.splitext(pth)[1].lower() or ".ttf"
+            font = load_font_from_memory(ext, data, len(data), 48, ffi.cast("int *", arr), len(cps))
+            if font.texture.id == 0:
                 font = load_font_ex(pth, 48, arr, len(cps))
-                set_texture_filter(font.texture, TEXTURE_FILTER_BILINEAR)
-                break
-            except Exception:
-                font = None
+        except Exception:
+            font = None
+        if font is not None and font.texture.id != 0:
+            set_texture_filter(font.texture, TEXTURE_FILTER_BILINEAR)
+            break
+        font = None
     ui.set_font(font)
     LIT = load_shader_from_memory(VS_LIT, FS_LIT)
     POST = load_shader_from_memory(VS_POST, FS_POST)
@@ -311,11 +339,11 @@ def _gun_pose(p, wi):
         R = _mm(_rz(roll), _mm(_rx(pitch), _ry(yaw)))
         bx = lerpf(0.21, 0.02, k)
         by = lerpf(-0.19, -0.10, k) + math.sin(t * spd * 1.6) * 0.012
-        bz = lerpf(0.42, dist, k) + math.sin(t * spd * 0.8) * 0.010
+        bz = lerpf(0.38, dist, k) + math.sin(t * spd * 0.8) * 0.010
         return parts, muz, pivot, R, (bx, by, bz), lerpf(1.0, sc_t, k)
     ads = p.ads
-    hip = (0.21, -0.19, 0.42)
-    adsp = (0.0, -0.105, 0.36) if not w.scope else hip
+    hip = (0.21, -0.19, 0.38)
+    adsp = (0.0, -0.105, 0.33) if not w.scope else hip
     bx = lerpf(hip[0], adsp[0], ads) + (p.sway if cfg["sway"] else 0.0)
     by = lerpf(hip[1], adsp[1], ads) + (p.swayy if cfg["sway"] else 0.0)
     bz = lerpf(hip[2], adsp[2], ads) - p.kick * 0.008
@@ -390,15 +418,15 @@ def draw_viewmodel():
 #  BICAK viewmodel: sag elde tutus + bicaga ozel inceleme animasyonlari
 # ---------------------------------------------------------------------------
 _KNIFE_RIG = {
-    "knife": dict(pos=(-0.30, -0.22, 0.72), scale=0.62, roll=0.52,
+    "knife": dict(pos=(-0.30, -0.22, 0.66), scale=0.62, roll=0.52,
                   pivot=(0.0, -0.010, -0.130), hand=0.00,
-                  insp=(-0.14, -0.03, 0.88), iscale=0.62),
-    "karambit": dict(pos=(-0.30, -0.23, 0.72), scale=0.55, roll=0.58,
+                  insp=(-0.14, -0.03, 0.84), iscale=0.62),
+    "karambit": dict(pos=(-0.30, -0.23, 0.66), scale=0.55, roll=0.58,
                      pivot=(0.0, -0.030, -0.370), hand=0.09,
-                     insp=(-0.12, -0.02, 0.92), iscale=0.52),
-    "butterfly": dict(pos=(-0.30, -0.22, 0.72), scale=0.62, roll=0.55,
+                     insp=(-0.12, -0.02, 0.88), iscale=0.52),
+    "butterfly": dict(pos=(-0.30, -0.22, 0.66), scale=0.62, roll=0.55,
                       pivot=(0.0, -0.005, 0.030), hand=0.01,
-                      insp=(-0.14, -0.08, 0.82), iscale=0.70),
+                      insp=(-0.14, -0.08, 0.78), iscale=0.70),
 }
 
 
@@ -411,7 +439,9 @@ def _knife_slash_A(kid, prog):
     if kid == "knife":
         return _mm(_rz(-swing * 1.15), _mm(_ry(swing * 0.35), _rx(swing * 0.18))), swing
     if kid == "karambit":
-        return _mm(_rz(-swing * 1.65), _mm(_ry(swing * 0.55), _rx(swing * 0.10))), swing
+        # Yavastan hizlanan tam tur: 2*pi bitiste sifir aciya doner.
+        spin = (prog ** 1.55) * (2.0 * math.pi)
+        return _mm(_rz(-spin), _mm(_ry(swing * 0.55), _rx(swing * 0.10))), swing
     return _mm(_rz(-swing * 1.45), _mm(_ry(swing * 0.45), _rx(swing * 0.16))), swing
 
 
@@ -421,6 +451,40 @@ def _slash_offset(kid, swing):
     if kid == "karambit":
         return (swing * 0.20, swing * 0.08, swing * 0.04)
     return (swing * 0.18, swing * 0.07, swing * 0.08)
+
+
+_TIP_CACHE = {}
+
+
+def _knife_tip(kid):
+    if kid not in _TIP_CACHE:
+        _axis, parts = knives.model(kid)
+        best = max(parts, key=lambda q: q[2] + q[5] * 0.5)
+        _TIP_CACHE[kid] = (best[0], best[1], best[2] + best[5] * 0.5)
+    return _TIP_CACHE[kid]
+
+
+def _draw_knife_trail(kid, base, B, prog, pivot, scale):
+    tip = _knife_tip(kid)
+    rl_disable_depth_mask()
+    begin_blend_mode(BLEND_ADDITIVE)
+    for i in range(9):
+        pr = max(0.0, prog - i * 0.022)
+        A, sw = _knife_slash_A(kid, pr)
+        off = _slash_offset(kid, sw)
+        gb = (base[0] + off[0], base[1] + off[1], base[2] + off[2])
+        d = ((tip[0] - pivot[0]) * scale, (tip[1] - pivot[1]) * scale,
+             (tip[2] - pivot[2]) * scale)
+        d = _mv(_mm(A, B), d)
+        pos = (gb[0] + d[0], gb[1] + d[1], gb[2] + d[2])
+        f = 1.0 - i / 9.0
+        a = int(150 * f * f)
+        s = 0.030 * (0.35 + 0.65 * f)
+        draw_cube(Vector3(pos[0], pos[1], pos[2]), s, s, s, C(100, 235, 255, a))
+        draw_cube(Vector3(pos[0], pos[1], pos[2]), s * 0.55, s * 0.55, s * 0.55,
+                  C(235, 255, 255, min(255, int(a * 1.4))))
+    end_blend_mode()
+    rl_enable_depth_mask()
 
 
 def _knife_pose(p, kid):
@@ -446,7 +510,7 @@ def _knife_pose(p, kid):
         ix, iy, iz = rig["insp"]
         bx = lerpf(-0.26, ix, k) + bob[0]
         by = lerpf(-0.24, iy, k) + bob[1]
-        bz = lerpf(0.62, iz, k) + bob[2]
+        bz = lerpf(0.58, iz, k) + bob[2]
         return (bx, by, bz), _mm(A, B), lerpf(rig["scale"], rig["iscale"], k)
     bx += -(p.sway if cfg["sway"] else 0.0)
     by += (p.swayy if cfg["sway"] else 0.0)
@@ -613,6 +677,7 @@ def render_scene():
 
 def draw_post():
     st = g.state
+    sc, ox, oy = update_view()
     _v2[0], _v2[1] = SW, SH
     set_shader_value(POST, LOCS["res"], _v2, SHADER_UNIFORM_VEC2)
     sf(POST, LOCS["time"], get_time())
@@ -622,5 +687,6 @@ def draw_post():
     sf(POST, LOCS["ult"], (1.0 if g.ult_t > 0 else 0.0) if st == "play" else 0.0)
     sf(POST, LOCS["fx"], 1.0 if cfg["fx"] else 0.0)
     begin_shader_mode(POST)
-    draw_texture_rec(g.rt.texture, Rectangle(0, 0, SW, -SH), Vector2(0, 0), WHITE)
+    draw_texture_pro(g.rt.texture, Rectangle(0, 0, SW, -SH),
+                     Rectangle(ox, oy, SW * sc, SH * sc), Vector2(0, 0), 0.0, WHITE)
     end_shader_mode()

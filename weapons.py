@@ -34,4 +34,5 @@ DIFFS = [
     ("Orta", dict(turn=3.8, react=0.45, spread=2.2, speed=0.88, dmg=0.85, head=0.12, lead=0.3)),
     ("Zor", dict(turn=6.0, react=0.28, spread=1.3, speed=1.0, dmg=1.0, head=0.25, lead=0.6)),
     ("Acımasız", dict(turn=9.0, react=0.14, spread=0.6, speed=1.1, dmg=1.1, head=0.4, lead=1.0)),
+    ("İmkansız", dict(turn=14.0, react=0.04, spread=0.15, speed=1.18, dmg=1.3, head=0.7, lead=1.4)),
 ]

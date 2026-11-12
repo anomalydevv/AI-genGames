@@ -58,7 +58,10 @@ def _preview_crosshair(cx, cy):
 
 def hud():
     p = g.p
+    spec = g.spec if (not p.alive and g.spec is not None and g.spec.alive) else None
+    v = spec if spec is not None else p
     w = WEAPONS[p.weapon]
+    vw = WEAPONS[v.weapon]
     cx, cy = SW // 2, SH // 2
     scoped = w.scope and p.ads > 0.85 and p.alive and not p.knife_active and not p.inspect
     if scoped:
@@ -109,34 +112,34 @@ def hud():
             ctxt("BOMBA KURULUYOR", SW / 2, 140, 22, WHITE)
     # bolge harfleri
     for letter, (sx, sz) in bomb.SITES.items():
-        sp = get_world_to_screen(Vector3(sx, 1.8, sz), g.cam)
+        sp = get_world_to_screen_ex(Vector3(sx, 1.8, sz), g.cam, SW, SH)
         if sp.x > 0 and sp.y > 0:
             ctxt(letter, sp.x, sp.y, 34, C(0, 230, 200, 200) if g.site_plan == letter else C(255, 205, 70, 160))
     # sol alt: can
     panel(20, SH - 100, 270, 80)
     txt("CAN", 34, SH - 94, 18, GRAY)
     R(34, SH - 70, 240, 14, C(40, 40, 46))
-    R(34, SH - 70, 240 * max(0, p.hp) / 100, 14, C(80, 230, 110) if p.hp > 35 else RED)
-    rtxt("%d" % math.ceil(max(0, p.hp)), 274, SH - 94, 20, WHITE)
+    R(34, SH - 70, 240 * max(0, v.hp) / 100, 14, C(80, 230, 110) if v.hp > 35 else RED)
+    rtxt("%d" % math.ceil(max(0, v.hp)), 274, SH - 94, 20, WHITE)
     R(34, SH - 46, 240, 8, C(40, 40, 46))
-    R(34, SH - 46, 240 * p.armor / 100, 8, C(90, 160, 255))
+    R(34, SH - 46, 240 * v.armor / 100, 8, C(90, 160, 255))
     txt("$ %d" % g.money, 34, SH - 36, 20, GOLD)
     # sag alt: mermi / bicak
-    if p.knife_active:
-        icons.draw_knife(p.knife, SW - 452, SH - 96, 128, 51)
+    if v.knife_active:
+        icons.draw_knife(v.knife, SW - 452, SH - 96, 128, 51)
     else:
-        icons.draw_weapon(p.weapon, SW - 452, SH - 96, 128, 51)
+        icons.draw_weapon(v.weapon, SW - 452, SH - 96, 128, 51)
     panel(SW - 310, SH - 100, 290, 80)
-    if p.knife_active:
-        k = knives.by_id(p.knife)
+    if v.knife_active:
+        k = knives.by_id(v.knife)
         rtxt(k.name, SW - 34, SH - 96, 20, CYAN)
         rtxt("BICAK", SW - 34, SH - 70, 34, WHITE)
         rtxt("SOL TIK: KES  |  1-2: SILAH  |  SCROLL", SW - 34, SH - 28, 13, GRAY)
     else:
-        rtxt(w.name, SW - 34, SH - 96, 20, CYAN)
-        rtxt("%d / %d" % (p.mag[p.weapon], p.res[p.weapon]), SW - 34, SH - 70, 38, WHITE if p.mag[p.weapon] > 0 else RED)
+        rtxt(vw.name, SW - 34, SH - 96, 20, CYAN)
+        rtxt("%d / %d" % (v.mag[v.weapon], v.res[v.weapon]), SW - 34, SH - 70, 38, WHITE if v.mag[v.weapon] > 0 else RED)
         rtxt("Y: INCELE  |  SCROLL: DEGISTIR", SW - 34, SH - 28, 13, GRAY)
-        if p.reload_t > 0:
+        if v.reload_t > 0:
             ctxt("YENIDEN DOLDURULUYOR", SW / 2, SH / 2 + 80, 22, WHITE)
     if p.inspect and p.alive:
         ctxt("INCELEME   |   Y: BITIR", SW / 2, SH - 132, 18, CYAN)
@@ -329,9 +332,9 @@ def title(s, sub=None):
 
 
 def screen_main():
-    title("HEX ARENA", "5v5 Bomba Modu - Bot Maci")
+    title("HEX ARENA", "Özel Maç - Bomba Modu")
     rtxt("RUH: %d" % playerdata.souls(), SW - 24, 22, 24, GOLD)
-    labels = [("Bot Maci Kur", "setup"), ("Karakter Secimi", "char"), ("Magaza", "shop"), ("Ayarlar", "settings")]
+    labels = [("Özel Maç Kur", "setup"), ("Karakter Secimi", "char"), ("Magaza", "shop"), ("Ayarlar", "settings")]
     y = 220
     for i, (lab, target) in enumerate(labels):
         if button(SW / 2 - 160, y + i * 70, 320, 56, lab, 26):
@@ -376,39 +379,55 @@ def screen_char():
 
 
 def screen_setup():
-    title("BOT MACI KUR", "5v5 - Saldirici vs Savunmaci")
-    panel(60, 130, 560, 470)
-    txt("Oyun Modu", 90, 150, 22, WHITE)
+    title("ÖZEL MAÇ KUR", "Botları, tur hedefini ve zorluğu ayarla")
+    panel(60, 130, 560, 540)
+    txt("Oyun Modu", 90, 146, 20, WHITE)
     for i, (nm, tgt, _) in enumerate(MODES):
-        if button(90 + i * 250, 190, 230, 46, "%s (Hedef %d)" % (nm, tgt), 18, active=(g.mode == i)):
+        if button(90 + i * 250, 176, 230, 42, "%s (Hedef %d)" % (nm, tgt), 17, active=(g.target == tgt)):
             g.mode = i
-    txt("Zorluk", 90, 260, 22, WHITE)
+            g.target = tgt
+    g.target = int(round(slider(90, 238, 480, "Tur hedefi", g.target, 1, 30, "%.0f")))
+    txt("Zorluk", 90, 304, 20, WHITE)
     for i, (nm, _) in enumerate(DIFFS):
-        if button(90 + i * 128, 296, 118, 44, nm, 17, active=(g.diff == i)):
+        if button(90 + i * 104, 336, 96, 38, nm, 14, active=(g.diff == i)):
             g.diff = i
-    txt("Oyuncu adi:", 90, 366, 22, WHITE)
-    name_field(7, 90, 400, 320)
-    if button(90, 500, 220, 56, "MACI BASLAT", 20):
-        g.target = MODES[g.mode][1]
+    txt("Takım botları", 90, 394, 20, WHITE)
+    txt("Müttefik bot:", 90, 432, 19, WHITE)
+    if button(250, 426, 40, 36, "-", 22):
+        g.ally_bots = max(0, g.ally_bots - 1)
+    ctxt(str(g.ally_bots), 310, 432, 22, CYAN)
+    if button(350, 426, 40, 36, "+", 22):
+        g.ally_bots = min(4, g.ally_bots + 1)
+    txt("Düşman bot:", 90, 480, 19, WHITE)
+    if button(250, 474, 40, 36, "-", 22):
+        g.enemy_bots = max(0, g.enemy_bots - 1)
+    ctxt(str(g.enemy_bots), 310, 480, 22, CYAN)
+    if button(350, 474, 40, 36, "+", 22):
+        g.enemy_bots = min(5, g.enemy_bots + 1)
+    txt("0 = bot kapalı", 410, 452, 14, GRAY)
+    txt("Oyuncu adı:", 90, 528, 20, WHITE)
+    name_field(7, 90, 560, 480)
+    if button(90, 610, 220, 50, "MAÇI BAŞLAT", 20):
         start_match()
-    if button(330, 500, 220, 56, "Geri", 20):
+    if button(330, 610, 220, 50, "Geri", 20):
         g.state = "main"
-    panel(650, 130, 570, 470)
+    panel(650, 130, 570, 540)
     txt("MAC KURALLARI", 675, 146, 24, CYAN)
     lines = [
-        "5v5: 4 bot müttefik + 5 bot düşman.",
+        "Takımlar: %d bot müttefik + %d bot düşman." % (g.ally_bots, g.enemy_bots),
+        "Tur hedefi: ilk %d roundu alan kazanır." % g.target,
+        "Zorluk: %s" % DIFFS[g.diff][0],
         "Saldırıcı takım bombayı A veya B'ye kurar.",
         "Tur süresi: 60 saniye. Bomba: 30 saniye.",
         "Savunmacılar bombayı 8 sn'de defuse eder.",
         "Bomba patlarsa saldırıcılar roundu alır.",
         "Rakip takımı yok et veya bombayı koru.",
-        "Market: B   |   Bicak: 3   |   E: Bomba",
-        "Tek silah inceleme: Y   |   Scroll: slot sec",
-        "Bomba sadece A/B bölgesinde kurulur.",
+        "Market: B (sadece freeze) | Bıçak: 3 | E: Bomba",
+        "Tek silah inceleme: Y | Scroll: slot seç",
     ]
     for i, s in enumerate(lines):
-        txt(s, 675, 190 + i * 38, 16, GRAY if i % 2 else WHITE)
-    txt("MOD: %s - ilk %d roundu alan kazanir" % (MODES[g.mode][0], MODES[g.mode][1]), 675, 520, 18, GOLD)
+        txt(s, 675, 188 + i * 36, 18, GRAY if i % 2 else WHITE)
+    txt("ÖZEL MAÇ: %d bot müttefik, %d bot düşman" % (g.ally_bots, g.enemy_bots), 675, 590, 17, GOLD)
 
 
 def name_field(i, x, y, w):
@@ -452,6 +471,7 @@ def screen_settings():
     _preview_crosshair(900, 474)
     txt("WASD hareket | Ctrl comel | Space zipla | R reload | 1-2 silah | 3 bicak | Y incele", 330, 520, 15, GRAY)
     txt("X / C / V skill | G ulti | Scroll slot | TAB skor | ESC duraklat | E bomba", 330, 544, 15, GRAY)
+    txt("F11 veya Alt+Enter: tam ekran", 330, 568, 15, GRAY)
     if button(SW / 2 - 130, 650, 260, 52, "Geri", 24):
         g.state = g.back
 

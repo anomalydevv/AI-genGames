@@ -1,6 +1,6 @@
 # opencode.md
 
-HEX ARENA: pyray (raylib) ile yazilmis, moduler yapida 5v5 bomba modu FPS oyunu.
+HEX ARENA: pyray (raylib) ile yazilmis, moduler yapida ozel macli bomba modu FPS oyunu.
 Bu dosya projenin haritasidir. Her yeni dosya/modul eklendiginde veya bir
 dosyanin gorevi degistiginde burasi **guncellenmek zorundadir**.
 
@@ -16,25 +16,25 @@ dosyanin gorevi degistiginde burasi **guncellenmek zorundadir**.
 | --- | --- |
 | `app.py` | Pencereyi acar, font/playerdata yukler, ana oyun dongusunu calistirir ve ekranlari yonlendirir. |
 | `config.py` | Ekran boyutu, renkler, `cl`/`lerpf`/`wrap` yardimcilari ve `cfg` ayar sozlugu (crosshair dahil). |
-| `state.py` | Tum calisma zamani durumunu tutan tek global `g` nesnesi (takim skorlari, bomba, efektler, yere dusen silahlar, `rt`/`vmrt` render texture'lari). |
-| `weapons.py` | 8 silahin tanimi, isimleri, slot eslemesi ve bot zorluk parametreleri. |
-| `modes.py` | Mac turleri: Dereceli (12 round) ve Tam Gaz (5 round). |
+| `state.py` | Tum calisma zamani durumunu tutan tek global `g` nesnesi (takim skorlari, bomba, efektler, yere dusen silahlar, ozel mac ayarlari: `ally_bots`/`enemy_bots`/`target`, `rt`/`vmrt` render texture'lari). |
+| `weapons.py` | 8 silahin tanimi, isimleri, slot eslemesi ve 5 bot zorluk parametresi (Kolay..Imkansiz). |
+| `modes.py` | Mac turu on ayarlari: Dereceli (12) ve Tam Gaz (5); tur hedefi ayrica 1-30 arasi ayarlanabilir. |
 | `characters.py` | `Character`/`Skill` siniflari ve 4 karakter (HEX, ZEPHYR, NYX, TITAN). |
 | `world.py` | Duvarlar, koridorlar, acik/kapali odalar, heaven platformlari, A/B bolgeleri, spawnlar ve yol agi. |
 | `physics.py` | Ray-cast, gorunurluk, carpisma itmesi ve yer cekimi fizigi. |
 | `fighter.py` | `F` savasci sinifi (takim, bot ekonomisi, bomba tasiyici, bicak alanlari dahil). |
 | `combat.py` | Ates, hasar, oldurme, killfeed ve alt kill gostergesi; dost atesi yok; bomba dusurme; olumde silah dusurme ve envanter sifirlama; bot oldurme odulu. |
-| `AI.py` | Takim bilincli bot AI: ekonomi ve tur basi silah satin alma, A/B site push, bomba kurma, defuse, nisan, strafe, burst ates ve yere dusen silahi alma. |
-| `bomb.py` | Bomba kurma/defuse, 120 saniyelik timer ve patlama durumu. |
+| `AI.py` | Takim bilincli bot AI: ekonomi ve tur basi silah satin alma, A/B site push, bomba kurma, defuse, hedef onceliklendirme (bomba tasiyici/defuser/dusuk HP), nisan, strafe, burst ates ve yere dusen silahi alma; Imkansiz zorlukta daha hizli dusunme/atis. |
+| `bomb.py` | Bomba kurma/defuse, 30 saniyelik timer ve patlama durumu. |
 | `knives.py` | Karambit/kelebek/bicak 3B modelleri, menteşe etiketleri (`hA`/`hB`), yakin dovus ve yedek 2B ikonlar. |
-| `icons.py` | Silah/bicak modellerini ayri sahnede yandan cekip PNG kaydeder ve markete/kill gostergesine verir. |
+| `icons.py` | Silah/bicak modellerini ayri sahnede yandan cekip PNG kaydeder ve markete/kill gostergesine verir; PNG'leri Python ile okuyup bellekten yukler (Turkce karakterli yol sorunu) ve yedek 2B ikona dusebilir. |
 | `weapon_icons.py` | Ikon uretilemezse kullanilan yedek 2B silah cizimleri. |
 | `shaders.py` | Aydinlatma ve post-process GLSL kaynaklari. |
 | `viewmodel.py` | Birinci sahis silah modeli geometrisi (8 silah) ve ates edince oynayan parca etiketleri (`slide`/`bolt`/`pump`/`hammer`). |
-| `render.py` | Font yukleme, kameralar, harita/site/bomba/yere dusen silah cizimi, sert govdeli silah/bicak viewmodel'i, ayri `vmrt` kompoziti, bicaga ozel slash yayi/iz ve asimetrik kelebek kanat animasyonu, post-process. |
+| `render.py` | Fontu bellekten yukleme (Turkce yol sorunu), kameralar, harita/site/bomba/yere dusen silah cizimi, sert govdeli silah/bicak viewmodel'i, ayri `vmrt` kompoziti, bicaga ozel slash yayi/iz ve asimetrik kelebek kanat animasyonu, post-process. |
 | `ui.py` | 2B arayuz yardimcilari: font, metin, buton, slider, toggle, panel. |
-| `match.py` | 5v5 mac akisi: takimlar, roundlar, bomba kosullari, karakter skilleri, magaza ekonomisi, botlarin tur basi satin almasi, kelebek cift menteşe yay fiziği. |
-| `hud.py` | HUD, bomba uyarisi, kill gostergesi, crosshair stilleri, skor tablosu, 3 slotlu ikonlu market, magaza ve menuler. |
+| `match.py` | Ozel mac akisi: ayarlanabilir ally/enemy bot sayisi ve tur hedefi, roundlar, bomba kosullari, karakter skilleri, magaza ekonomisi, botlarin tur basi satin almasi, kelebek cift menteşe yay fiziği; olumde once takim arkadasini, yoksa dusmani izletir. |
+| `hud.py` | HUD, bomba uyarisi, kill gostergesi, crosshair stilleri, skor tablosu, 3 slotlu ikonlu market, magaza ve menuler; ozel mac kurulum ekrani (bot sayilari, tur slider'i, 5 zorluk). |
 | `playerdata.py` | `playerdata.json` kalici verisi: souls, MVP, karakter, bicak, crosshair. |
 | `playerdata.json` | Oyuncunun kayitli verisi (souls, matches, mvps, secimler). |
 | `assets/fonts/` | Projeyle gelen font (Rajdhani); her bilgisayarda calisir. |
@@ -43,12 +43,12 @@ dosyanin gorevi degistiginde burasi **guncellenmek zorundadir**.
 ## Bagimlilik Yonu
 
 `main.py -> app.py -> {render, hud, match, icons}`
-`match.py -> {AI, bomb, combat, characters, knives, modes, playerdata, physics, world}`
+`match.py -> {AI, bomb, combat, characters, knives, playerdata, physics, world}`
 `render.py -> {world, viewmodel, shaders, characters, bomb, knives, ui}`
 `hud.py -> {characters, bomb, knives, icons, playerdata, modes, ui}`
 `icons.py -> {weapons, viewmodel, knives, shaders, config}`
 
-Not: Kontroller `WASD`, `1` ana silah, `2` tabanca, `3` bicak, `Y` incele, `E` bomba, `B` market (sadece tur basi 5 sn); scroll slot degistirir.
+Not: Kontroller `WASD`, `1` ana silah, `2` tabanca, `3` bicak, `Y` incele, `E` bomba, `B` market (sadece tur basi 5 sn); scroll slot degistirir. Ozel macta ally/enemy bot sayisi 0-4/0-5, tur hedefi 1-30 ve zorluk secilebilir; bot sayisi 0 olan takimda eleme roundu kapatilir.
 
 Dongusel import yasaktir. Yeni bir modul eklerken bu yonu koru.
 
@@ -79,6 +79,20 @@ goruntusu testleriyle sabitlendi. Degistirirken tekrar test edin.
   hayalet iz cizilir.
 - Viewmodel isigi (LIT `vm=1`): L `(0.32,0.58,-0.75)`, ambient x1.25,
   diff x0.68, spec x0.55, fog x0.15.
+
+## Ozel Mac
+
+- `hud.screen_setup`: ally bot `0-4`, enemy bot `0-5`, tur hedefi `1-30`
+  slider'i ve 5 zorluk (Kolay, Orta, Zor, Acimasiz, Imkansiz).
+- `match.start_match` bu degerleri kullanir; `g.target` artik mode tarafindan
+  ezilmez. Mode butonlari sadece hazir hedef degeri atar.
+- Bot sayisi `0` olan takimda eleme roundu kapatilir; boylece dusmansiz
+  custom macta round aninda bitmez.
+- Oyuncu olunce `spectate_targets` once canli takim arkadasini, yoksa canli
+  dusmani izletir; `g.spec` asla bos kamerada kilitli kalmaz.
+- `icons.py` PNG'leri Python ile okuyup `load_image_from_memory` ile yukler;
+  `render.py` de Rajdhani fontunu ayni sekilde bellekten yukler; boylece
+  Turkce karakterli proje yolu raylib'in `fopen` hatasina takilmaz.
 
 ## Kurallar
 

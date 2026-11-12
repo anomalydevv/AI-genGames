@@ -19,7 +19,8 @@ g.back = "main"
 g.quit = False
 
 # mac ayarlari
-g.bots_n = 5
+g.ally_bots = 4
+g.enemy_bots = 5
 g.diff = 2
 g.mode = 0
 g.target = 5

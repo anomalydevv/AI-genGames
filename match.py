@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Mac akisi: 5v5 takimlar, bomba roundlari, karakter yetenekleri, bicak."""
+"""Mac akisi: ozel takimlar, bomba roundlari, karakter yetenekleri, bicak."""
 import math
 import random
 
@@ -9,11 +9,11 @@ import bomb
 import characters
 import knives
 import playerdata
+import ui
 from AI import bot_buy, bot_update
 from combat import apply_damage, shoot
 from config import C, CYAN, DEG, cl, cfg, lerpf
 from fighter import F, look
-from modes import MODES
 from physics import los, phys
 from state import g
 from weapons import WEAPONS, slot_of
@@ -23,27 +23,33 @@ ALLY_COLS = [C(90, 160, 255), C(120, 255, 220), C(160, 200, 255), C(80, 220, 255
 ENEMY_COLS = [C(255, 90, 90), C(255, 150, 60), C(255, 100, 160), C(220, 80, 80), C(255, 180, 90)]
 
 
-def spectate_allies():
+def spectate_targets():
+    # Once canli takim arkadaslari; yoksa canli dusmani izle (kamera kilitlenmesin).
     p = g.p
-    return [f for f in g.FS if f.alive and f.team == p.team and f is not p]
+    mates = [f for f in g.FS if f.alive and f.team == p.team and f is not p]
+    if mates:
+        return mates
+    return [f for f in g.FS if f.alive and f is not p]
 
 
 def spectate_cycle(step=1):
-    allies = spectate_allies()
-    if not allies:
+    targets = spectate_targets()
+    if not targets:
         g.spec = None
         return
-    if g.spec in allies:
-        i = (allies.index(g.spec) + step) % len(allies)
+    if g.spec in targets:
+        i = (targets.index(g.spec) + step) % len(targets)
     else:
-        i = 0 if step >= 0 else len(allies) - 1
-    g.spec = allies[i]
+        i = 0 if step >= 0 else len(targets) - 1
+    g.spec = targets[i]
 
 
 def start_match():
     pd = playerdata.data()
     g.char = characters.index_of(pd.get("character", "hex"))
-    g.target = MODES[g.mode][1]
+    g.target = max(1, min(30, int(g.target)))
+    g.ally_bots = max(0, min(4, int(g.ally_bots)))
+    g.enemy_bots = max(0, min(5, int(g.enemy_bots)))
     g.atk_wins = 0
     g.dfn_wins = 0
     g.FS = []
@@ -54,10 +60,10 @@ def start_match():
     g.p.knife_active = False
     g.FS.append(g.p)
     g.spec = None
-    for i in range(4):
+    for i in range(g.ally_bots):
         nm = g.names[i].strip() or "Müttefik%d" % (i + 1)
         g.FS.append(F(nm, ALLY_COLS[i % len(ALLY_COLS)], False, 0))
-    for i in range(5):
+    for i in range(g.enemy_bots):
         nm = (g.names[8 + i].strip() if 8 + i < len(g.names) else "") or "Düşman%d" % (i + 1)
         g.FS.append(F(nm, ENEMY_COLS[i % len(ENEMY_COLS)], False, 1))
     g.kills_show = []
@@ -215,7 +221,7 @@ def _use_character_c(p, frozen):
 
 def player_update(dt):
     p = g.p
-    md = get_mouse_delta()
+    md = ui.mouse_delta()
     if g.skip_mouse > 0:
         g.skip_mouse -= 1
         md = Vector2(0, 0)
@@ -523,7 +529,7 @@ def update_play(dt):
             dfn_alive = any(f.alive and f.team == 1 for f in g.FS)
             if not atk_alive:
                 end_round(1, "ELIM")
-            elif not dfn_alive:
+            elif not dfn_alive and g.enemy_bots > 0:
                 end_round(0, "ELIM")
             elif g.round_t <= 0:
                 end_round(1, "TIME")
