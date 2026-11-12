@@ -9,18 +9,35 @@ import bomb
 import characters
 import knives
 import playerdata
-from bot import bot_update
+from AI import bot_buy, bot_update
 from combat import apply_damage, shoot
 from config import C, CYAN, DEG, cl, cfg, lerpf
 from fighter import F, look
 from modes import MODES
 from physics import los, phys
 from state import g
-from weapons import WEAPONS
+from weapons import WEAPONS, slot_of
 from world import SPAWNS_ATK, SPAWNS_DFN
 
 ALLY_COLS = [C(90, 160, 255), C(120, 255, 220), C(160, 200, 255), C(80, 220, 255)]
 ENEMY_COLS = [C(255, 90, 90), C(255, 150, 60), C(255, 100, 160), C(220, 80, 80), C(255, 180, 90)]
+
+
+def spectate_allies():
+    p = g.p
+    return [f for f in g.FS if f.alive and f.team == p.team and f is not p]
+
+
+def spectate_cycle(step=1):
+    allies = spectate_allies()
+    if not allies:
+        g.spec = None
+        return
+    if g.spec in allies:
+        i = (allies.index(g.spec) + step) % len(allies)
+    else:
+        i = 0 if step >= 0 else len(allies) - 1
+    g.spec = allies[i]
 
 
 def start_match():
@@ -32,7 +49,11 @@ def start_match():
     g.FS = []
     g.p = F(g.names[7].strip() or "Oyuncu", CYAN, True, 0)
     g.p.knife = knives.by_id(pd.get("knife", "knife")).kid
+    g.p.slots = [None, 0]
+    g.p.weapon = 0
+    g.p.knife_active = False
     g.FS.append(g.p)
+    g.spec = None
     for i in range(4):
         nm = g.names[i].strip() or "Müttefik%d" % (i + 1)
         g.FS.append(F(nm, ALLY_COLS[i % len(ALLY_COLS)], False, 0))
@@ -54,10 +75,11 @@ def start_match():
     g.wave_hit = set()
     g.round = 0
     g.feed = []
+    g.drops = []
     g.paused = False
     g.market = False
     g.phase_t = 5
-    g.round_t = 120
+    g.round_t = 60
     g.last_winner = None
     g.p.owned = {0}
     g.cursor_dead = False
@@ -83,8 +105,7 @@ def start_round():
         if f.player:
             wi = f.weapon if f.weapon in f.owned else 0
         else:
-            wl = [3, 0.9, 2, 3, 1.2, 2.2, 0.8, 1.6] if g.round > 1 else [5, 2, 0.5, 0.5, 0.2, 0.4, 0.2, 0.3]
-            wi = random.choices(range(len(WEAPONS)), weights=wl)[0]
+            wi = 0
         if f.team == 0:
             x, z = atk_sp[ia % len(atk_sp)]
             ia += 1
@@ -92,13 +113,25 @@ def start_round():
             x, z = dfn_sp[idf % len(dfn_sp)]
             idf += 1
         f.reset(x, z, wi)
+        if not f.player:
+            bot_buy(f)
     p = g.p
     p.switch_t = 0.0
     p.kick = 0.0
+    p.cycle = 0.0
+    p.inspect = False
+    p.inspect_t = 0.0
+    p.slash_t = 0.0
+    for si in (0, 1):
+        if p.slots[si] not in p.owned:
+            p.slots[si] = None
+    if p.slots[1] is None:
+        p.slots[1] = 0
+    g.spec = None
     bomb.new_round(p)
     g.phase = "freeze"
     g.phase_t = 5.0
-    g.round_t = 120.0
+    g.round_t = 60.0
     g.x_ready = True
     g.v_cd = 0.0
     g.c_cd = 0.0
@@ -114,6 +147,7 @@ def start_round():
     g.market = False
     g.explode_t = 0.0
     g.kills_show = []
+    g.drops = []
 
 
 def end_round(winner, reason):
@@ -129,6 +163,10 @@ def end_round(winner, reason):
     for f in g.FS:
         if f.team == winner:
             f.wins += 1
+            if not f.player:
+                f.money = min(9000, f.money + 1000)
+        elif not f.player:
+            f.money = min(9000, f.money + 300)
     g.money += 1000 if winner == g.p.team else 300
     g.phase = "roundend"
     g.phase_t = 4.0
@@ -193,12 +231,47 @@ def player_update(dt):
     p.heat = max(0, p.heat - dt * 3)
     if not p.alive:
         p.death_t += dt
-        p.yaw -= md.x * 0.0022 * cfg["sens"]
-        p.pitch = cl(p.pitch - md.y * 0.0022 * cfg["sens"], -1.5, 1.5)
+        if g.spec is None or not g.spec.alive:
+            spectate_cycle(0)
+        wh = get_mouse_wheel_move()
+        if is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or is_key_pressed(KEY_RIGHT):
+            spectate_cycle(1)
+        elif wh != 0 or is_key_pressed(KEY_LEFT):
+            spectate_cycle(1 if wh < 0 else -1)
         p.vx = p.vz = 0
         phys(p, dt)
         return
-    p.ghost = max(0, p.ghost - dt)
+    p.inspect_t += dt
+    # kelebek bicak mentese fizigi: kanatlar sirayla acilip kapanir
+    if p.knife_active and p.knife == "butterfly":
+        ta = tb = 0.0
+        if p.inspect:
+            t = p.inspect_t % 3.6
+            if t < 0.5:
+                ta = 1.30
+            elif t < 1.0:
+                ta = 0.0
+            elif t < 1.5:
+                tb = 1.30
+            elif t < 2.0:
+                tb = 0.0
+            elif t < 2.4:
+                ta = 1.30
+            elif t < 2.8:
+                ta = 0.0
+        p.hinge_v += (ta - p.hinge_a) * 140.0 * dt
+        p.hinge_v *= max(0.0, 1.0 - 16.0 * dt)
+        p.hinge_a += p.hinge_v * dt
+        p.hinge_a = cl(p.hinge_a, -0.18, 1.45)
+        p.hinge_bv += (tb - p.hinge_b) * 140.0 * dt
+        p.hinge_bv *= max(0.0, 1.0 - 16.0 * dt)
+        p.hinge_b += p.hinge_bv * dt
+        p.hinge_b = cl(p.hinge_b, -0.18, 1.45)
+    else:
+        p.hinge_a = p.hinge_b = 0.0
+        p.hinge_v = p.hinge_bv = 0.0
+    p.cycle = max(0.0, p.cycle - dt * 9.0)
+    p.ghost = max(0.0, p.ghost - dt)
     if g.ult_t > 0 and g.ult_kind == "ult_stealth":
         p.ghost = max(p.ghost, 0.2)
     sens = 0.0022 * cfg["sens"] * (1 - p.ads * (0.85 if w.scope else 0.35))
@@ -216,7 +289,8 @@ def player_update(dt):
         wx /= n
         wz /= n
     crouch = is_key_down(KEY_LEFT_CONTROL)
-    want_ads = is_mouse_button_down(MOUSE_BUTTON_RIGHT) and p.reload_t <= 0 and not frozen and not p.knife_active
+    want_ads = (is_mouse_button_down(MOUSE_BUTTON_RIGHT) and p.reload_t <= 0 and not frozen
+                and not p.knife_active and not p.inspect)
     p.ads += ((1.0 if want_ads else 0.0) - p.ads) * min(1, dt * 12)
     speed = 6.2 * w.spd
     if crouch:
@@ -258,26 +332,46 @@ def player_update(dt):
     p.bobamp += (tgt - p.bobamp) * min(1, dt * 8)
     p.sway += (cl(-md.x * 0.0012, -0.05, 0.05) - p.sway) * min(1, dt * 10)
     p.swayy += (cl(md.y * 0.0012, -0.04, 0.04) - p.swayy) * min(1, dt * 10)
-    # silah / bicak secimi
-    for i in range(len(WEAPONS)):
-        if is_key_pressed(KEY_ONE + i) and i in p.owned:
-            p.weapon = i
+    # silah yuvalari: 1 = ana silah, 2 = tabanca, 3 = bicak
+    if is_key_pressed(KEY_Y):
+        p.inspect = not p.inspect
+        p.inspect_t = 0.0
+        p.switch_t = 0.0
+        p.slash_t = 0.0
+        p.reload_t = 0.0
+    if is_key_pressed(KEY_ONE) or is_key_pressed(KEY_TWO):
+        want = 0 if is_key_pressed(KEY_ONE) else 1
+        wi = p.slots[want]
+        if wi is not None and wi in p.owned:
+            p.weapon = wi
             p.reload_t = 0
             p.switch_t = 0.35
             p.knife_active = False
-            break
-    if is_key_pressed(KEY_ZERO):
+            p.inspect = False
+    if is_key_pressed(KEY_THREE) or is_key_pressed(KEY_ZERO):
         p.knife_active = True
         p.reload_t = 0
         p.switch_t = 0.35
+        p.inspect = False
     wh = get_mouse_wheel_move()
     if wh != 0:
-        p.knife_active = False
-        own = sorted(p.owned)
-        k = own.index(p.weapon)
-        p.weapon = own[(k + (1 if wh < 0 else -1)) % len(own)]
+        order = []
+        if p.slots[0] is not None and p.slots[0] in p.owned:
+            order.append(0)
+        if p.slots[1] is not None and p.slots[1] in p.owned:
+            order.append(1)
+        order.append(2)
+        cur = 2 if p.knife_active else slot_of(p.weapon)
+        k = order.index(cur) if cur in order else 0
+        k = (k + (1 if wh < 0 else -1)) % len(order)
+        if order[k] == 2:
+            p.knife_active = True
+        else:
+            p.weapon = p.slots[order[k]]
+            p.knife_active = False
         p.reload_t = 0
         p.switch_t = 0.35
+        p.inspect = False
     w = WEAPONS[p.weapon]
     p.switch_t = max(0, p.switch_t - dt)
     p.cd -= dt
@@ -289,9 +383,11 @@ def player_update(dt):
             p.mag[p.weapon] += take
             p.res[p.weapon] -= take
     if is_key_pressed(KEY_R):
+        p.inspect = False
         start_reload(p)
     # bomba kurma
     if is_key_down(KEY_E) and g.phase == "live":
+        p.inspect = False
         if p.team == 0:
             bomb.update_plant(p, dt)
         else:
@@ -299,16 +395,19 @@ def player_update(dt):
     # ates / bicak
     if p.knife_active:
         if is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+            p.inspect = False
             knives.try_slash(p)
     else:
         fire = is_mouse_button_down(MOUSE_BUTTON_LEFT) if w.auto else is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
         if fire and p.cd <= 0 and p.reload_t <= 0 and p.switch_t <= 0 and not frozen:
+            p.inspect = False
             if p.mag[p.weapon] > 0:
                 spread = lerpf(w.hip, w.ads, p.ads) + sp * 0.1 + (2.0 if not p.grounded else 0) + p.heat
                 shoot(p, spread, 1.25 if g.ult_t > 0 else 1.0)
                 p.mag[p.weapon] -= 1
                 p.cd = w.rof / (1.5 if g.ult_t > 0 else 1.0)
                 p.kick += w.kick
+                p.cycle = 1.0
                 p.flash = 0.05
                 p.pitch += w.kick * 0.3 * DEG
                 p.yaw += (random.random() - .5) * w.kick * 0.25 * DEG
@@ -380,10 +479,12 @@ def update_play(dt):
             g.paused = not g.paused
     if g.paused:
         return
-    if is_key_pressed(KEY_B):
+    if is_key_pressed(KEY_B) and g.phase == "freeze":
         g.market = not g.market
     if g.market:
-        return
+        if g.phase == "freeze":
+            return
+        g.market = False
     g.hurt = max(0, g.hurt - dt * 1.8)
     g.hitm = max(0, g.hitm - dt)
     g.hit_t = max(0, g.hit_t - dt)

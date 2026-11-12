@@ -23,16 +23,46 @@ def spark(x, y, z, col, n=5, sp=3.0):
                         0.4 + random.random() * 0.3, col])
 
 
+def drop_weapon(v):
+    seen = set()
+    cand = [None if v.knife_active else v.weapon]
+    if v.slots:
+        cand += list(v.slots)
+    for wi in cand:
+        if wi is None or wi in seen:
+            continue
+        seen.add(wi)
+        g.drops.append({
+            "wi": wi,
+            "x": v.x + (random.random() - 0.5) * 0.5,
+            "z": v.z + (random.random() - 0.5) * 0.5,
+            "yaw": random.random() * 6.2832,
+            "mag": v.mag[wi] if 0 <= wi < len(v.mag) else 0,
+            "res": v.res[wi] if 0 <= wi < len(v.res) else 0,
+        })
+        if len(g.drops) > 24:
+            g.drops.pop(0)
+    if v.player:
+        v.owned = {0}
+        v.slots = [None, 0]
+        v.weapon = 0
+        v.knife_active = False
+        v.inspect = False
+
+
 def kill(v, a, wname, head):
     v.alive = False
     v.hp = 0
     v.deaths += 1
     v.death_t = 0.0
+    drop_weapon(v)
     if g.bomb and g.bomb["carrier"] is v:
         bomb.drop(v)
     if a is not None and a is not v:
         a.kills += 1
         a.round_kills += 1
+        if not a.player:
+            a.money = min(9000, a.money + 300)
     feed_add(a.name if a else "?", wname, v.name, head)
     if a is g.p and v is not a:
         g.money += 300

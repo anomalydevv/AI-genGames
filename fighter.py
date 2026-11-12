@@ -10,6 +10,9 @@ class F:
     def __init__(s, name, col, player=False, team=0):
         s.name, s.col, s.player, s.team = name, col, player, team
         s.kills = s.deaths = s.wins = s.round_kills = 0
+        s.money = 800
+        s.burst_left = 0
+        s.burst_pause = 0.0
         s.alive = False
         s.x = s.y = s.z = s.vx = s.vy = s.vz = 0.0
         s.yaw = s.pitch = 0.0
@@ -41,8 +44,16 @@ class F:
         s.slash_t = 0.0
         s.slash_cd = 0.0
         s.slash_n = 0
+        s.hinge_a = 0.0
+        s.hinge_v = 0.0
+        s.hinge_b = 0.0
+        s.hinge_bv = 0.0
         # oyuncu
         s.owned = {0}
+        s.slots = [None, None]
+        s.inspect = False
+        s.inspect_t = 0.0
+        s.cycle = 0.0
         s.bobt = 0.0
         s.ads = 0.0
         s.kick = 0.0
@@ -78,6 +89,15 @@ class F:
         s.knife_active = False
         s.slash_t = 0.0
         s.slash_cd = 0.0
+        s.burst_left = 0
+        s.burst_pause = 0.0
+        s.hinge_a = 0.0
+        s.hinge_v = 0.0
+        s.hinge_b = 0.0
+        s.hinge_bv = 0.0
+        s.inspect = False
+        s.inspect_t = 0.0
+        s.cycle = 0.0
 
 
 def look(f):

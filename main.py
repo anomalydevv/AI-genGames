@@ -5,8 +5,8 @@ Kurulum:  pip install raylib
 Calistir: python main.py
 
 WASD hareket | Ctrl com | Space zipla | Mouse sol ates | Mouse sag nisan
-R reload | 1-8 silah | 0 bicak | X / C / V skill | G ulti | E bomba kur/defuse
-B market | TAB skor tablosu | ESC duraklat
+R reload | 1 ana silah | 2 tabanca | 3 bicak | Y incele | Scroll slot
+X / C / V skill | G ulti | E bomba kur/defuse | TAB skor | ESC duraklat
 """
 from app import main
 

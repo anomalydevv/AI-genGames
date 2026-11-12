@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Bot yapay zekasi: takim hedefleri, bomba kurma/defuse, nisan ve hareket."""
+"""Bot yapay zekasi: ekonomi, satin alma, takim hedefleri, nisan ve hareket."""
 import math
 import random
 
@@ -10,6 +10,37 @@ from physics import los, phys
 from state import g
 from weapons import DIFFS, PREF, WEAPONS
 from world import WPS, find_path
+
+
+def bot_buy(b):
+    b.owned = {0}
+    b.weapon = 0
+    b.knife_active = False
+    b.inspect = False
+    best = None
+    for i in range(1, len(WEAPONS)):
+        wd = WEAPONS[i]
+        if wd.price > b.money:
+            continue
+        score = wd.price + random.random() * 450.0
+        if b.team == 1 and wd.rng >= 90:
+            score += 220.0
+        if b.team == 0 and wd.auto:
+            score += 140.0
+        if best is None or score > best[0]:
+            best = (score, i)
+    if best is not None:
+        wi = best[1]
+        b.money -= WEAPONS[wi].price
+        b.owned.add(wi)
+        b.weapon = wi
+        b.mag[wi] = WEAPONS[wi].mag
+        b.res[wi] = 999
+    if b.money >= 150:
+        b.money -= 150
+        b.armor = 50.0
+    b.reload_t = b.cd = b.burst_pause = 0.0
+    b.burst_left = 0
 
 
 def _acquire(b, D):
@@ -69,6 +100,30 @@ def _should_defuse(b):
     return closest is b
 
 
+def _pickup(b):
+    if not g.drops:
+        return
+    cur = WEAPONS[b.weapon].price
+    best, bd = None, 1.7 ** 2
+    for d in g.drops:
+        if WEAPONS[d["wi"]].price <= cur:
+            continue
+        dd = (d["x"] - b.x) ** 2 + (d["z"] - b.z) ** 2
+        if dd < bd:
+            bd, best = dd, d
+    if best is None:
+        return
+    wi = best["wi"]
+    b.weapon = wi
+    b.owned.add(wi)
+    b.knife_active = False
+    b.mag[wi] = max(1, best.get("mag", WEAPONS[wi].mag))
+    b.res[wi] = 999
+    b.reload_t = 0.0
+    b.cd = max(b.cd, 0.25)
+    g.drops.remove(best)
+
+
 def bot_update(b, dt):
     if not b.alive:
         b.death_t += dt
@@ -81,6 +136,7 @@ def bot_update(b, dt):
         phys(b, dt)
         return
     b.cd -= dt
+    b.burst_pause = max(0.0, b.burst_pause - dt)
     b.slash_cd = max(0.0, getattr(b, "slash_cd", 0.0) - dt)
     if b.glitch > 0:
         b.glitch -= dt
@@ -108,7 +164,6 @@ def bot_update(b, dt):
     mvx = mvz = 0.0
     want_move = True
     action = ""
-    # hedef pozisyon
     if b.team == 0:
         if bomb and bomb["planted"]:
             aim = (bomb["x"], bomb["z"])
@@ -166,15 +221,28 @@ def bot_update(b, dt):
         err = abs(wrap(yt - b.yaw))
         if b.mag[b.weapon] <= 0 and b.reload_t <= 0:
             b.reload_t = w.reload
-        elif b.react <= 0 and b.cd <= 0 and b.reload_t <= 0 and b.glitch <= 0 and err < 0.07 and d < w.rng:
+        elif (b.react <= 0 and b.cd <= 0 and b.burst_pause <= 0 and b.reload_t <= 0
+              and b.glitch <= 0 and err < 0.07 and d < w.rng):
             spread = (w.ads if w.scope else w.hip * 0.6) + D["spread"]
             shoot(b, spread, D["dmg"])
             b.mag[b.weapon] -= 1
-            b.cd = w.rof * (1.0 + random.random() * (0.9 if w.auto else 0.6))
+            if w.auto:
+                if b.burst_left <= 0:
+                    b.burst_left = random.randint(3, 6)
+                b.burst_left -= 1
+                if b.burst_left <= 0:
+                    b.burst_pause = 0.18 + random.random() * 0.25
+                    b.cd = 0.0
+                else:
+                    b.cd = w.rof * (1.0 + random.random() * 0.45)
+            else:
+                b.cd = w.rof * (1.0 + random.random() * 0.6)
         if abs(mvx) + abs(mvz) < 0.01:
             want_move = False
     else:
         b.pitch += (0 - b.pitch) * min(1, 4 * dt)
+        if b.lost_t > 0 and not (b.team == 0 and bomb and bomb["carrier"] is b):
+            aim = b.last
         dx, dz = _navigate(b, aim[0], aim[1], dt, D["turn"])
         if dx or dz:
             mvx, mvz = dx, dz
@@ -194,7 +262,6 @@ def bot_update(b, dt):
         if b.team == 0 and bomb and bomb["carrier"] is b and in_site(b.x, b.z) is not None:
             _plant_carrier(b, dt)
             mvx = mvz = 0.0
-    # hareket
     tvx, tvz = mvx * sp, mvz * sp
     if b.glitch > 0:
         tvx *= 0.3
@@ -219,3 +286,4 @@ def bot_update(b, dt):
             b.strafe *= -1
         b.lastpos = (b.x, b.z)
         b.stuck_t = 0
+    _pickup(b)

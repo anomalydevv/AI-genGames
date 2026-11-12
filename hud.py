@@ -14,13 +14,13 @@ from match import start_match
 from modes import MODES
 from state import g
 from ui import R, RL, button, ctxt, mouse_in, panel, rtxt, slider, toggle, txt
-from weapons import DIFFS, WEAPONS, WNAMES_TR
+from weapons import DIFFS, WEAPONS, WNAMES_TR, slot_of
 
 CROSS_NAMES = ["Nokta", "Sabit +", "Standart"]
 
 
 def draw_crosshair(p, w, cx, cy):
-    if not p.alive or p.knife_active:
+    if not p.alive or p.knife_active or p.inspect:
         return
     if w.scope and p.ads > 0.85:
         return
@@ -60,7 +60,7 @@ def hud():
     p = g.p
     w = WEAPONS[p.weapon]
     cx, cy = SW // 2, SH // 2
-    scoped = w.scope and p.ads > 0.85 and p.alive and not p.knife_active
+    scoped = w.scope and p.ads > 0.85 and p.alive and not p.knife_active and not p.inspect
     if scoped:
         draw_ring(Vector2(cx, cy), 300, 1600, 0, 360, 64, BLACK)
         draw_line_ex(Vector2(cx - 300, cy), Vector2(cx + 300, cy), 1, C(0, 0, 0, 200))
@@ -122,17 +122,24 @@ def hud():
     R(34, SH - 46, 240 * p.armor / 100, 8, C(90, 160, 255))
     txt("$ %d" % g.money, 34, SH - 36, 20, GOLD)
     # sag alt: mermi / bicak
+    if p.knife_active:
+        icons.draw_knife(p.knife, SW - 452, SH - 96, 128, 51)
+    else:
+        icons.draw_weapon(p.weapon, SW - 452, SH - 96, 128, 51)
     panel(SW - 310, SH - 100, 290, 80)
     if p.knife_active:
         k = knives.by_id(p.knife)
         rtxt(k.name, SW - 34, SH - 96, 20, CYAN)
         rtxt("BICAK", SW - 34, SH - 70, 34, WHITE)
-        ctxt("SOL TIK: KES   |   0: BICAK   |   1-8: SILAH", SW - 165, SH - 28, 14, GRAY)
+        rtxt("SOL TIK: KES  |  1-2: SILAH  |  SCROLL", SW - 34, SH - 28, 13, GRAY)
     else:
         rtxt(w.name, SW - 34, SH - 96, 20, CYAN)
         rtxt("%d / %d" % (p.mag[p.weapon], p.res[p.weapon]), SW - 34, SH - 70, 38, WHITE if p.mag[p.weapon] > 0 else RED)
+        rtxt("Y: INCELE  |  SCROLL: DEGISTIR", SW - 34, SH - 28, 13, GRAY)
         if p.reload_t > 0:
             ctxt("YENIDEN DOLDURULUYOR", SW / 2, SH / 2 + 80, 22, WHITE)
+    if p.inspect and p.alive:
+        ctxt("INCELEME   |   Y: BITIR", SW / 2, SH - 132, 18, CYAN)
     # skill bari
     ch = characters.get(g.char)
     skills = [(ch.x.key, ch.x.name), (ch.c.key, ch.c.name), (ch.v.key, ch.v.name), (ch.g.key, ch.g.name)]
@@ -176,11 +183,14 @@ def hud():
         ctxt("%s AKTIF %.1f" % (ch.g.name, g.ult_t), SW / 2, 106, 24, RED)
     if g.phase == "freeze":
         ctxt("BASLAMAYA %d" % math.ceil(g.phase_t), SW / 2, 210, 44, WHITE)
-        ctxt("B: Market   |   E: Bomba kur   |   0: Bicak", SW / 2, 258, 22, CYAN)
+        ctxt("B: Market   |   E: Bomba   |   1-2: Silah   |   3: Bicak   |   Y: Incele", SW / 2, 258, 22, CYAN)
     if g.phase == "roundend" and g.last_winner:
         ctxt("%s KAZANDI  (%s)" % (g.last_winner, g.round_reason), SW / 2, 210, 40, GOLD)
     if not p.alive and g.phase == "live":
         ctxt("ELENDIN", SW / 2, 210, 44, RED)
+        if g.spec is not None:
+            ctxt("IZLENIYOR: %s" % g.spec.name, SW / 2, 258, 24, CYAN)
+        ctxt("SOL TIK / SCROLL / OK: takim arkadasi", SW / 2, 286, 16, GRAY)
     kill_banners()
     if cfg["fps"]:
         txt("%d FPS" % get_fps(), 10, 10, 18, C(255, 255, 255, 150))
@@ -243,7 +253,8 @@ def market_ui():
     items = [("Kevlar Yelek", "armor", 150, "+50 zirh | hasarin yarisini emer")]
     for i in range(1, len(WEAPONS)):
         wd = WEAPONS[i]
-        items.append((WNAMES_TR[i], i, wd.price, "Hasar %d  |  Sarjor %d  |  x%d" % (wd.dmg, wd.mag, wd.pel)))
+        slot = "ANA SILAH" if slot_of(i) == 0 else "TABANCA"
+        items.append((WNAMES_TR[i], i, wd.price, "%s  |  Hasar %d  |  Sarjor %d  |  x%d" % (slot, wd.dmg, wd.mag, wd.pel)))
     cw, chh = 497, 92
     gx, gy = 18, 10
     x0, y0 = x + 24, y + 68
@@ -281,14 +292,20 @@ def market_ui():
                 g.money -= price
                 p.armor = 50.0
             elif owned:
+                p.slots[slot_of(key)] = key
                 p.weapon = key
                 p.knife_active = False
+                p.inspect = False
+                p.switch_t = 0.35
             else:
                 g.money -= price
                 p.owned.add(key)
+                p.slots[slot_of(key)] = key
                 p.weapon = key
                 p.knife_active = False
-    ctxt("B / ESC: kapat   |   0: Bicak   |   1-8: Silah   |   Market acikken oyun durur",
+                p.inspect = False
+                p.switch_t = 0.35
+    ctxt("B / ESC: kapat   |   1-2: Silah   |   3: Bicak   |   Y: Incele   |   Market acikken oyun durur",
          SW / 2, y + h - 26, 17, GRAY)
 
 
@@ -381,11 +398,12 @@ def screen_setup():
     lines = [
         "5v5: 4 bot müttefik + 5 bot düşman.",
         "Saldırıcı takım bombayı A veya B'ye kurar.",
-        "Bomba süresi: 120 saniye.",
+        "Tur süresi: 60 saniye. Bomba: 30 saniye.",
         "Savunmacılar bombayı 8 sn'de defuse eder.",
         "Bomba patlarsa saldırıcılar roundu alır.",
         "Rakip takımı yok et veya bombayı koru.",
-        "Market: B   |   Bicak: 6   |   E: Bomba",
+        "Market: B   |   Bicak: 3   |   E: Bomba",
+        "Tek silah inceleme: Y   |   Scroll: slot sec",
         "Bomba sadece A/B bölgesinde kurulur.",
     ]
     for i, s in enumerate(lines):
@@ -432,8 +450,8 @@ def screen_settings():
         d["crosshair"] = cfg["crosshair"]
         playerdata.save()
     _preview_crosshair(900, 474)
-    txt("WASD hareket | Ctrl comel | Space zipla | R reload | 1-8 silah | 0 bicak", 330, 520, 15, GRAY)
-    txt("X / C / V skill | G ulti | B market | TAB skor | ESC duraklat | E bomba", 330, 544, 15, GRAY)
+    txt("WASD hareket | Ctrl comel | Space zipla | R reload | 1-2 silah | 3 bicak | Y incele", 330, 520, 15, GRAY)
+    txt("X / C / V skill | G ulti | Scroll slot | TAB skor | ESC duraklat | E bomba", 330, 544, 15, GRAY)
     if button(SW / 2 - 130, 650, 260, 52, "Geri", 24):
         g.state = g.back
 

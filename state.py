@@ -29,13 +29,16 @@ g.names = ["Kuzgun", "Pars", "Tilki", "Bozkurt", "Ejder", "Firtina", "Golge", "O
 # dunya / oyuncular
 g.FS = []
 g.p = None
+g.spec = None
 g.cam = None
 g.rt = None
+g.vmrt = None
 g.char = 0
 
 # efektler
 g.tracers = []
 g.parts = []
+g.drops = []
 g.feed = []
 g.kills_show = []
 g.hurt = g.hitm = g.hit_t = g.dig = 0.0
@@ -57,7 +60,7 @@ g.wave_t = 0.0
 g.wave_hit = set()
 g.phase = "freeze"
 g.phase_t = 0
-g.round_t = 120
+g.round_t = 60
 g.round = 0
 g.site_plan = "A"
 g.atk_wins = 0

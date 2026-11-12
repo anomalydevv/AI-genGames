@@ -22,6 +22,12 @@ WEAPONS = [
 WNAMES_TR = ["Hex-9 Tabanca", "Kasırga Revolver", "Gürz Pompalı", "VX-7 Tüfek", "Hayalet Keskin Nişancı",
              "Kral-47 Piyade", "Çelik .50 Tabanca", "M-249 Baskı Makinesi"]
 PREF = [10, 11, 6, 14, 26, 18, 20, 16]
+SLOT_OF = [1, 1, 0, 0, 0, 0, 1, 0]
+
+
+def slot_of(wi):
+    return SLOT_OF[wi] if 0 <= wi < len(SLOT_OF) else 1
+
 
 DIFFS = [
     ("Kolay", dict(turn=2.4, react=0.75, spread=3.5, speed=0.75, dmg=0.7, head=0.05, lead=0.1)),

@@ -1,11 +1,13 @@
 {
-  "souls": 500,
-  "matches": 0,
-  "mvps": 0,
-  "character": "zephyr",
+  "souls": 3780,
+  "matches": 3,
+  "mvps": 3,
+  "character": "hex",
   "knives": [
-    "knife"
+    "knife",
+    "karambit",
+    "butterfly"
   ],
-  "knife": "knife",
+  "knife": "butterfly",
   "crosshair": 0
 }

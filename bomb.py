@@ -6,7 +6,7 @@ from state import g
 
 SITES = {"A": (18.0, -16.0), "B": (-18.0, 16.0)}
 SITE_R = 3.8
-BOMB_TIME = 120.0
+BOMB_TIME = 30.0
 PLANT_TIME = 3.0
 DEFUSE_TIME = 8.0
 

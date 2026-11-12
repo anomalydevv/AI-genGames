@@ -14,7 +14,7 @@ void main(){
 
 FS_LIT = """#version 330
 in vec3 fragPosition; in vec3 fragNormal; in vec4 fragColor;
-uniform vec4 colDiffuse; uniform vec3 viewPos; uniform float pattern;
+uniform vec4 colDiffuse; uniform vec3 viewPos; uniform float pattern; uniform float vm;
 out vec4 finalColor;
 float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
@@ -32,17 +32,20 @@ void main(){
     base *= mix(0.62,1.0,line);
     ao = mix(0.55,1.0,clamp(fragPosition.y/2.2,0.0,1.0));
   }
-  vec3 L = normalize(vec3(0.45,0.85,0.30));
+  vec3 L = normalize(mix(vec3(0.45,0.85,0.30), vec3(0.32,0.58,-0.75), vm));
   vec3 V = normalize(viewPos - fragPosition);
   float diff = max(dot(N,L),0.0);
   vec3 amb = mix(vec3(0.20,0.19,0.18), vec3(0.34,0.40,0.52), N.y*0.5+0.5);
-  float rim = pow(1.0-max(dot(N,V),0.0),3.0)*0.18;
+  amb *= mix(1.0,1.25,vm);
+  float rim = pow(1.0-max(dot(N,V),0.0),3.0)*mix(0.18,0.30,vm);
   vec3 H = normalize(L+V);
   float spec = pow(max(dot(N,H),0.0),48.0)*(pattern>0.5?0.10:0.45);
-  vec3 col = base*(amb*ao + diff*vec3(1.05,0.95,0.82)*1.05*mix(0.7,1.0,ao)) + spec + rim*vec3(0.4,0.55,0.7);
+  spec *= mix(1.0,0.55,vm);
+  float dif = diff * mix(1.05,0.68,vm);
+  vec3 col = base*(amb*ao + dif*vec3(1.05,0.95,0.82)*mix(0.7,1.0,ao)) + spec + rim*vec3(0.4,0.55,0.7);
   float dist = length(viewPos-fragPosition);
   float f = 1.0-exp(-dist*0.010);
-  col = mix(col, vec3(0.62,0.69,0.77), clamp(f,0.0,0.85));
+  col = mix(col, vec3(0.62,0.69,0.77), clamp(f,0.0,0.85)*mix(1.0,0.15,vm));
   finalColor = vec4(col, colDiffuse.a);
 }"""
 
