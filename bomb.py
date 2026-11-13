@@ -3,21 +3,20 @@
 import math
 
 from state import g
+from world import SITE_R, SITES
 
-SITES = {"A": (18.0, -16.0), "B": (-18.0, 16.0)}
-SITE_R = 3.8
-BOMB_TIME = 30.0
+BOMB_TIME = 45.0
 PLANT_TIME = 3.0
 DEFUSE_TIME = 8.0
 
 
-def new_round(carrier):
+def new_round(x=0.0, z=0.0):
     g.bomb = {
-        "carrier": carrier,
+        "carrier": None,
         "planted": False,
-        "dropped": False,
-        "x": carrier.x if carrier else 0.0,
-        "z": carrier.z if carrier else 0.0,
+        "dropped": True,
+        "x": float(x),
+        "z": float(z),
         "site": "",
         "timer": 0.0,
         "plant_t": 0.0,
@@ -53,6 +52,19 @@ def drop(actor):
         b["x"], b["z"] = actor.x, actor.z
 
 
+def try_pickup(actor, radius=2.2):
+    b = g.bomb
+    if not b or b["planted"] or b["carrier"] is not None or not b["dropped"]:
+        return False
+    if not actor.alive or actor.team != 0:
+        return False
+    if (actor.x - b["x"]) ** 2 + (actor.z - b["z"]) ** 2 > radius * radius:
+        return False
+    b["carrier"] = actor
+    b["dropped"] = False
+    return True
+
+
 def update(dt):
     b = g.bomb
     if not b:
@@ -79,7 +91,7 @@ def update(dt):
     if b["dropped"]:
         best, bd = None, 2.2 ** 2
         for f in g.FS:
-            if f.alive and f.team == 0:
+            if f.alive and not f.player and f.team == 0:
                 d = (f.x - b["x"]) ** 2 + (f.z - b["z"]) ** 2
                 if d < bd:
                     bd, best = d, f

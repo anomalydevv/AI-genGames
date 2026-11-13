@@ -6,6 +6,7 @@ import hud
 import icons
 import playerdata
 import render
+import skins
 from config import C, SH, SW, cfg
 from match import update_play
 from state import g
@@ -19,6 +20,10 @@ def main():
     render.init_gfx()
     try:
         icons.init()
+    except Exception:
+        pass
+    try:
+        skins.init_textures()
     except Exception:
         pass
     pd = playerdata.data()

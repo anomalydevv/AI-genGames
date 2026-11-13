@@ -9,12 +9,14 @@ import characters
 import icons
 import knives
 import playerdata
+import skins
 from config import C, CYAN, GOLD, RED, SH, SW, cfg, lerpf
-from match import start_match
+from match import nearest_drop, start_match
 from modes import MODES
 from state import g
-from ui import R, RL, button, ctxt, mouse_in, panel, rtxt, slider, toggle, txt
+from ui import R, RL, button, ctxt, mouse_in, panel, rtxt, slider, toggle, txt, tw
 from weapons import DIFFS, WEAPONS, WNAMES_TR, slot_of
+from world import MAPS, THEME
 
 CROSS_NAMES = ["Nokta", "Sabit +", "Standart"]
 
@@ -60,15 +62,14 @@ def hud():
     p = g.p
     spec = g.spec if (not p.alive and g.spec is not None and g.spec.alive) else None
     v = spec if spec is not None else p
-    w = WEAPONS[p.weapon]
     vw = WEAPONS[v.weapon]
     cx, cy = SW // 2, SH // 2
-    scoped = w.scope and p.ads > 0.85 and p.alive and not p.knife_active and not p.inspect
+    scoped = vw.scope and v.ads > 0.85 and v.alive and not v.knife_active and not v.inspect
     if scoped:
         draw_ring(Vector2(cx, cy), 300, 1600, 0, 360, 64, BLACK)
         draw_line_ex(Vector2(cx - 300, cy), Vector2(cx + 300, cy), 1, C(0, 0, 0, 200))
         draw_line_ex(Vector2(cx, cy - 300), Vector2(cx, cy + 300), 1, C(0, 0, 0, 200))
-    draw_crosshair(p, w, cx, cy)
+    draw_crosshair(v, vw, cx, cy)
     if g.hitm > 0:
         c = RED if g.hitm_k else WHITE
         for dx, dy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
@@ -102,9 +103,10 @@ def hud():
                 R(SW / 2 - 160, 184, 320, 12, C(40, 40, 46))
                 R(SW / 2 - 160, 184, 320 * dp, 12, CYAN)
         elif b["dropped"]:
-            ctxt("BOMBA DUSTU - E ile AL", SW / 2, 120, 30, GOLD)
+            near = p.team == 0 and (p.x - b["x"]) ** 2 + (p.z - b["z"]) ** 2 < 2.2 ** 2
+            ctxt("[F] SPIKE AL" if near else "SPIKE YERDE", SW / 2, 120, 30 if near else 26, GOLD)
         elif b["carrier"] is p:
-            ctxt("BOMBA SENDE - %s BOLGESINE KUR (E)" % g.site_plan, SW / 2, 120, 26, GOLD)
+            ctxt("SPIKE SENDE - %s BOLGESINE KUR (E)" % g.site_plan, SW / 2, 120, 26, GOLD)
         if b["plant_t"] > 0:
             pp = bomb.plant_progress()
             R(SW / 2 - 150, 118, 300, 14, C(40, 40, 46))
@@ -114,7 +116,8 @@ def hud():
     for letter, (sx, sz) in bomb.SITES.items():
         sp = get_world_to_screen_ex(Vector3(sx, 1.8, sz), g.cam, SW, SH)
         if sp.x > 0 and sp.y > 0:
-            ctxt(letter, sp.x, sp.y, 34, C(0, 230, 200, 200) if g.site_plan == letter else C(255, 205, 70, 160))
+            hot = THEME["accent"] if g.site_plan == letter else THEME["accent2"]
+            ctxt(letter, sp.x, sp.y, 34, C(hot.r, hot.g, hot.b, 200 if g.site_plan == letter else 160))
     # sol alt: can
     panel(20, SH - 100, 270, 80)
     txt("CAN", 34, SH - 94, 18, GRAY)
@@ -141,7 +144,7 @@ def hud():
         rtxt("Y: INCELE  |  SCROLL: DEGISTIR", SW - 34, SH - 28, 13, GRAY)
         if v.reload_t > 0:
             ctxt("YENIDEN DOLDURULUYOR", SW / 2, SH / 2 + 80, 22, WHITE)
-    if p.inspect and p.alive:
+    if v.inspect and v.alive:
         ctxt("INCELEME   |   Y: BITIR", SW / 2, SH - 132, 18, CYAN)
     # skill bari
     ch = characters.get(g.char)
@@ -186,7 +189,7 @@ def hud():
         ctxt("%s AKTIF %.1f" % (ch.g.name, g.ult_t), SW / 2, 106, 24, RED)
     if g.phase == "freeze":
         ctxt("BASLAMAYA %d" % math.ceil(g.phase_t), SW / 2, 210, 44, WHITE)
-        ctxt("B: Market   |   E: Bomba   |   1-2: Silah   |   3: Bicak   |   Y: Incele", SW / 2, 258, 22, CYAN)
+        ctxt("B: Market   |   F: Spike   |   E: Bomba   |   1-2: Silah   |   3: Bicak   |   Y: Incele", SW / 2, 258, 22, CYAN)
     if g.phase == "roundend" and g.last_winner:
         ctxt("%s KAZANDI  (%s)" % (g.last_winner, g.round_reason), SW / 2, 210, 40, GOLD)
     if not p.alive and g.phase == "live":
@@ -195,6 +198,17 @@ def hud():
             ctxt("IZLENIYOR: %s" % g.spec.name, SW / 2, 258, 24, CYAN)
         ctxt("SOL TIK / SCROLL / OK: takim arkadasi", SW / 2, 286, 16, GRAY)
     kill_banners()
+    if g.assist_t > 0 and p.alive:
+        ctxt("ASIST +1   %s" % g.assist_name, SW / 2, 310, 26, CYAN)
+    d = nearest_drop(p, 2.0) if p.alive and g.phase != "freeze" else None
+    if d is not None:
+        ctxt("[F]  %s  AL" % WNAMES_TR[d["wi"]], SW / 2, SH - 156, 24, GOLD)
+    if g.map_name:
+        txt("HARITA: %s   YARI %d" % (g.map_name, g.half + 1), 10, 34, 16, THEME["accent"])
+        txt("TARAF: %s" % ("SALDIRI" if p.team == 0 else "SAVUNMA"), 10, 52, 16, WHITE)
+    if g.side_t > 0:
+        ctxt("TARAF DEGISTI - SEN: %s" % ("SALDIRI" if p.team == 0 else "SAVUNMA"),
+             SW / 2, 340, 26, THEME["accent"])
     if cfg["fps"]:
         txt("%d FPS" % get_fps(), 10, 10, 18, C(255, 255, 255, 150))
 
@@ -222,12 +236,13 @@ def kill_banners():
 
 def scoreboard():
     fs = sorted(g.FS, key=lambda f: (f.team, -f.kills, f.deaths))
-    w, h = 780, 110 + len(fs) * 36
+    w, h = 880, 110 + len(fs) * 36
     x, y = SW / 2 - w / 2, SH / 2 - h / 2
     panel(x, y, w, h)
-    ctxt("SKOR TABLOSU", SW / 2, y + 12, 28, CYAN)
+    ctxt("SKOR TABLOSU" + ("   -   " + g.map_name if g.map_name else ""), SW / 2, y + 12, 28, CYAN)
     hdr = y + 56
-    for tx, s in ((x + 30, "#"), (x + 80, "ISIM"), (x + 380, "TAKIM"), (x + 470, "KILL"), (x + 550, "OLUM"), (x + 630, "K/D"), (x + 700, "ROUND")):
+    for tx, s in ((x + 30, "#"), (x + 80, "ISIM"), (x + 390, "TAKIM"), (x + 490, "KILL"),
+                  (x + 560, "ASIST"), (x + 640, "OLUM"), (x + 720, "K/D"), (x + 790, "KAZANILAN")):
         txt(s, tx, hdr, 18, GRAY)
     for i, f in enumerate(fs):
         yy = hdr + 28 + i * 36
@@ -235,14 +250,15 @@ def scoreboard():
             R(x + 10, yy - 4, w - 20, 32, C(0, 230, 200, 40))
         col = WHITE if f.alive else C(150, 150, 150)
         team = "SALDIRI" if f.team == 0 else "SAVUNMA"
-        tcol = C(120, 200, 255) if f.team == 0 else C(255, 120, 100)
+        tcol = C(120, 200, 255) if f.team == g.p.team else C(255, 120, 100)
         txt(str(i + 1), x + 30, yy, 22, col)
         txt(f.name + ("" if f.alive else "  (oldu)"), x + 80, yy, 22, col)
-        txt(team, x + 380, yy, 18, tcol)
-        txt(str(f.kills), x + 470, yy, 22, GOLD)
-        txt(str(f.deaths), x + 550, yy, 22, col)
-        txt("%.2f" % (f.kills / max(1, f.deaths)), x + 630, yy, 22, col)
-        txt(str(f.wins), x + 700, yy, 22, col)
+        txt(team, x + 390, yy, 18, tcol)
+        txt(str(f.kills), x + 490, yy, 22, GOLD)
+        txt(str(f.assists), x + 560, yy, 22, CYAN)
+        txt(str(f.deaths), x + 640, yy, 22, col)
+        txt("%.2f" % (f.kills / max(1, f.deaths)), x + 720, yy, 22, col)
+        txt(str(f.wins), x + 790, yy, 22, col)
 
 
 def market_ui():
@@ -416,18 +432,23 @@ def screen_setup():
     lines = [
         "Takımlar: %d bot müttefik + %d bot düşman." % (g.ally_bots, g.enemy_bots),
         "Tur hedefi: ilk %d roundu alan kazanır." % g.target,
-        "Zorluk: %s" % DIFFS[g.diff][0],
-        "Saldırıcı takım bombayı A veya B'ye kurar.",
+        "Zorluk: %s (güç takımlara dengeli dağıtılır)." % DIFFS[g.diff][0],
+        "Saldırıcılar yerdeki spike'ı alıp A veya B'ye kurar.",
         "Tur süresi: 60 saniye. Bomba: 30 saniye.",
-        "Savunmacılar bombayı 8 sn'de defuse eder.",
-        "Bomba patlarsa saldırıcılar roundu alır.",
-        "Rakip takımı yok et veya bombayı koru.",
+        "11 round sonunda takımlar taraf değiştirir.",
         "Market: B (sadece freeze) | Bıçak: 3 | E: Bomba",
-        "Tek silah inceleme: Y | Scroll: slot seç",
+        "F: spike veya yerdeki silahı al | Y: silah incele",
     ]
     for i, s in enumerate(lines):
-        txt(s, 675, 188 + i * 36, 18, GRAY if i % 2 else WHITE)
-    txt("ÖZEL MAÇ: %d bot müttefik, %d bot düşman" % (g.ally_bots, g.enemy_bots), 675, 590, 17, GOLD)
+        txt(s, 675, 188 + i * 34, 17, GRAY if i % 2 else WHITE)
+    txt("HARİTA HAVUZU (3 HARİTA)", 675, 470, 19, WHITE)
+    picks = [("Rastgele", -1)] + [(m["short"], i) for i, m in enumerate(MAPS)]
+    for i, (nm, idx) in enumerate(picks):
+        if button(675 + i * 132, 500, 124, 40, nm, 14, active=(g.map_pick == idx)):
+            g.map_pick = idx
+    txt("Rastgele: maç başında havuzdan harita seçilir.", 675, 548, 14, GRAY)
+    cur = MAPS[g.map_pick]["name"] if 0 <= g.map_pick < len(MAPS) else "Rastgele"
+    txt("Harita: %s" % cur, 675, 588, 17, GOLD)
 
 
 def name_field(i, x, y, w):
@@ -469,7 +490,7 @@ def screen_settings():
         d["crosshair"] = cfg["crosshair"]
         playerdata.save()
     _preview_crosshair(900, 474)
-    txt("WASD hareket | Ctrl comel | Space zipla | R reload | 1-2 silah | 3 bicak | Y incele", 330, 520, 15, GRAY)
+    txt("WASD hareket | Ctrl comel | Space zipla | R reload | F silah al | 1-2 silah | 3 bicak | Y incele", 330, 520, 15, GRAY)
     txt("X / C / V skill | G ulti | Scroll slot | TAB skor | ESC duraklat | E bomba", 330, 544, 15, GRAY)
     txt("F11 veya Alt+Enter: tam ekran", 330, 568, 15, GRAY)
     if button(SW / 2 - 130, 650, 260, 52, "Geri", 24):
@@ -477,34 +498,120 @@ def screen_settings():
 
 
 def screen_shop():
-    title("MAGAZA", "Ruh puaniyla bicak satin al")
+    title("MAGAZA", "Bicak, silah kaplamasi ve koleksiyon")
     rtxt("RUH: %d" % playerdata.souls(), SW - 24, 22, 24, GOLD)
     d = playerdata.data()
+    tabs = [("BICAKLAR", 0), ("SILAH KAPLAMALARI", 1), ("BICAK KAPLAMALARI", 2)]
+    tw_ = 296
+    x0 = SW / 2 - (len(tabs) * tw_ + 10 * (len(tabs) - 1)) / 2
+    for i, (lab, idx) in enumerate(tabs):
+        if button(x0 + i * (tw_ + 10), 138, tw_, 38, lab, 16, active=(g.shop_tab == idx)):
+            g.shop_tab = idx
+    if g.shop_tab == 0:
+        _shop_knives(d)
+    elif g.shop_tab == 1:
+        _shop_skin_grid(d, "gun")
+    else:
+        _shop_skin_grid(d, "knife")
+    if button(SW / 2 - 130, 650, 260, 48, "Geri", 24):
+        g.state = "main"
+
+
+def _shop_knives(d):
     owned = d.get("knives", ["knife"])
     for i, k in enumerate(knives.KNIVES):
         x = 55 + i * 395
-        y = 165
-        panel(x, y, 365, 360)
-        icons.draw_knife(k.kid, x + 30, y + 18, 305, 122)
-        txt(k.name, x + 22, y + 152, 28, k.color)
-        txt(k.desc, x + 22, y + 190, 15, GRAY)
+        y = 184
+        panel(x, y, 365, 420)
+        icons.draw_knife(k.kid, x + 30, y + 22, 305, 148)
+        txt(k.name, x + 22, y + 180, 28, k.color)
+        txt(k.desc, x + 22, y + 218, 15, GRAY)
         is_owned = k.kid in owned
         if is_owned:
             if d.get("knife") == k.kid:
-                button(x + 100, y + 270, 165, 44, "SECILI", 18, active=True, enabled=False)
+                button(x + 100, y + 348, 165, 44, "SECILI", 18, active=True, enabled=False)
             else:
-                if button(x + 100, y + 270, 165, 44, "KUSAN", 18):
+                if button(x + 100, y + 348, 165, 44, "KUSAN", 18):
                     d["knife"] = k.kid
                     playerdata.save()
         else:
-            if button(x + 100, y + 270, 165, 44, "%d RUH" % k.price, 18, enabled=playerdata.souls() >= k.price):
+            if button(x + 100, y + 348, 165, 44, "%d RUH" % k.price, 18,
+                      enabled=playerdata.souls() >= k.price):
                 if playerdata.spend(k.price):
                     owned.append(k.kid)
                     d["knives"] = owned
                     d["knife"] = k.kid
                     playerdata.save()
-    if button(SW / 2 - 130, 600, 260, 52, "Geri", 24):
-        g.state = "main"
+
+
+def _wrap(s, x, y, w, size, col, limit=3):
+    words = s.split()
+    lines, cur = [], ""
+    for word in words:
+        test = (cur + " " + word).strip()
+        if cur and tw(test, size) > w:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    for i, line in enumerate(lines[:limit]):
+        txt(line, x, y + i * (size + 4), size, col)
+
+
+def _equip_skin(d, kind, sid):
+    if kind == "gun":
+        d["gun_skin"] = sid
+    else:
+        d["knife_skin"] = sid
+    playerdata.save()
+    if g.p is not None:
+        skins.apply(g.p, d)
+
+
+def _skin_card(s, kind, d, x, y, w, h):
+    panel(x, y, w, h)
+    sw = min(154.0, w * 0.38)
+    skins.draw_swatch(s.sid, x + 14, y + 16, sw, 96)
+    if s.best:
+        ctxt("EFSANE", x + 14 + sw / 2, y + 118, 14, GOLD)
+    elif s.note:
+        ctxt(s.note, x + 14 + sw / 2, y + 118, 12, s.accent)
+    tx = x + sw + 28
+    txt(s.name, tx, y + 14, 23, s.accent)
+    _wrap(s.desc, tx, y + 46, w - (tx - x) - 18, 14, GRAY, 4)
+    lk = "gun_skins" if kind == "gun" else "knife_skins"
+    ck = "gun_skin" if kind == "gun" else "knife_skin"
+    owned = d.get(lk, ["none"])
+    if "none" not in owned:
+        owned.append("none")
+    cur = d.get(ck, "none")
+    if s.sid in owned:
+        if cur == s.sid:
+            button(x + w - 158, y + h - 50, 144, 38, "AKTIF", 17, active=True, enabled=False)
+        else:
+            if button(x + w - 158, y + h - 50, 144, 38, "KUSAN", 17):
+                _equip_skin(d, kind, s.sid)
+    else:
+        if button(x + w - 158, y + h - 50, 144, 38, "%d RUH" % s.price, 17,
+                  enabled=playerdata.souls() >= s.price):
+            if playerdata.spend(s.price):
+                owned.append(s.sid)
+                d[lk] = owned
+                _equip_skin(d, kind, s.sid)
+
+
+def _shop_skin_grid(d, kind):
+    items = skins.GUN_SKINS if kind == "gun" else skins.KNIFE_SKINS
+    if kind == "gun":
+        x0, y0, cw, ch, gx, gy, cols = 38, 184, 392, 202, 18, 14, 3
+    else:
+        x0, y0, cw, ch, gx, gy, cols = 60, 190, 552, 200, 16, 16, 2
+    for i, s in enumerate(items):
+        x = x0 + (i % cols) * (cw + gx)
+        y = y0 + (i // cols) * (ch + gy)
+        _skin_card(s, kind, d, x, y, cw, ch)
 
 
 def screen_end():
@@ -516,8 +623,8 @@ def screen_end():
     ctxt("MVP: %s   |   Kazanilan RUH: +%d   |   Toplam RUH: %d" % (g.mvp, g.souls_earned, playerdata.souls()),
          SW / 2, 178, 22, WHITE)
     for i, f in enumerate(fs):
-        ctxt("%d. %s   %s   round %d   kill %d   olum %d" % (
-            i + 1, f.name, "SAL" if f.team == 0 else "SAV", f.wins, f.kills, f.deaths),
+        ctxt("%d. %s   %s   kazanılan %d   kill %d   asist %d   olum %d" % (
+            i + 1, f.name, "SAL" if f.team == 0 else "SAV", f.wins, f.kills, f.assists, f.deaths),
             SW / 2, 225 + i * 30, 20, GOLD if f.player else WHITE)
     if button(SW / 2 - 240, 590, 220, 54, "Tekrar Oyna", 22):
         start_match()

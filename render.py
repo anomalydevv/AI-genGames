@@ -14,13 +14,15 @@ import ui
 import bomb
 import characters
 import knives
+import KnivesAnim
+import skins
 from config import CYAN, DEG, SW, SH, C, cfg, cl, lerpf
 from fighter import look
 from shaders import FS_LIT, FS_POST, VS_LIT, VS_POST
 from state import g
 from viewmodel import GLOVE, METAL, SLEEVE, VM
 from weapons import WEAPONS
-from world import BOX
+from world import BOX, BOUND, THEME
 
 CUBE = SPHERE = LIT = POST = None
 AX_Y = Vector3(0, 1, 0)
@@ -84,6 +86,9 @@ def init_gfx():
     LOCS["viewPos"] = get_shader_location(LIT, "viewPos")
     LOCS["pattern"] = get_shader_location(LIT, "pattern")
     LOCS["vm"] = get_shader_location(LIT, "vm")
+    LOCS["skinMode"] = get_shader_location(LIT, "skinMode")
+    LOCS["skinA"] = get_shader_location(LIT, "skinA")
+    LOCS["skinB"] = get_shader_location(LIT, "skinB")
     for nm in ("res", "time", "wave", "hurt", "digital", "ult", "fx"):
         LOCS[nm] = get_shader_location(POST, nm)
     CUBE = load_model_from_mesh(gen_mesh_cube(1.0, 1.0, 1.0))
@@ -127,20 +132,42 @@ def draw_body(x, y, z, yaw, acc, wi, tip, glitch, walk):
     draw_model_ex(CUBE, Vector3(x + hf * sn, y + hy + 0.08, z + hf * cs), AX_Y, yaw / DEG, Vector3(0.4, 0.14, 0.4), dark)
 
 
+def _drop_col(wi):
+    price = WEAPONS[wi].price
+    if price >= 1500:
+        return C(255, 205, 70)
+    if price >= 800:
+        return C(170, 120, 255)
+    return C(0, 230, 200)
+
+
 def draw_drop(d):
     parts = VM[d["wi"]][0]
     yaw = d["yaw"]
     cs, sn = math.cos(yaw), math.sin(yaw)
     sc = 0.55
+    glow = _drop_col(d["wi"])
+    t = get_time()
+    pu = 0.5 + 0.5 * math.sin(t * 4.5 + d["x"] * 0.6 + d["z"] * 0.3)
+    bob = 0.03 * pu
     for part in parts:
         x, y, z, sx, sy_, sz, col = part[:7]
         if col is GLOVE or col is SLEEVE:
             continue
         wx = d["x"] - x * cs * sc + z * sn * sc
         wz = d["z"] + x * sn * sc + z * cs * sc
-        draw_model_ex(CUBE, Vector3(wx, 0.12 + y * sc, wz), AX_Y, yaw / DEG,
+        draw_model_ex(CUBE, Vector3(wx, 0.12 + y * sc + bob, wz), AX_Y, yaw / DEG,
                       Vector3(sx * sc, sy_ * sc, sz * sc), col)
-    draw_circle_3d(Vector3(d["x"], 0.035, d["z"]), 0.38, AX_X, 90.0, C(0, 230, 200, 30))
+    begin_blend_mode(BLEND_ADDITIVE)
+    draw_circle_3d(Vector3(d["x"], 0.045, d["z"]), 0.42 + 0.16 * pu, AX_X, 90.0,
+                   C(glow.r, glow.g, glow.b, int(55 + 55 * pu)))
+    draw_circle_3d(Vector3(d["x"], 0.05, d["z"]), 0.20 + 0.08 * pu, AX_X, 90.0,
+                   C(glow.r, glow.g, glow.b, int(70 + 50 * pu)))
+    draw_cube(Vector3(d["x"], 0.55, d["z"]), 0.05, 1.0, 0.05,
+              C(glow.r, glow.g, glow.b, 46))
+    draw_sphere(Vector3(d["x"], 0.42 + bob, d["z"]), 0.10 + 0.05 * pu,
+                C(glow.r, glow.g, glow.b, int(70 + 60 * pu)))
+    end_blend_mode()
 
 
 def set_view(sh_pos, pattern):
@@ -148,6 +175,18 @@ def set_view(sh_pos, pattern):
     set_shader_value(LIT, LOCS["viewPos"], _v3, SHADER_UNIFORM_VEC3)
     sf(LIT, LOCS["pattern"], pattern)
     sf(LIT, LOCS["vm"], 0.0)
+    sf(LIT, LOCS["skinMode"], 0.0)
+
+
+def _set_skin(sid):
+    mode = skins.shader_mode(sid)
+    sf(LIT, LOCS["skinMode"], float(mode))
+    if mode:
+        a, b = skins.shader_palette(sid)
+        _v3[0], _v3[1], _v3[2] = a.r / 255.0, a.g / 255.0, a.b / 255.0
+        set_shader_value(LIT, LOCS["skinA"], _v3, SHADER_UNIFORM_VEC3)
+        _v3[0], _v3[1], _v3[2] = b.r / 255.0, b.g / 255.0, b.b / 255.0
+        set_shader_value(LIT, LOCS["skinB"], _v3, SHADER_UNIFORM_VEC3)
 
 
 def draw_env():
@@ -157,11 +196,12 @@ def draw_env():
     for b in BOX:
         draw_model_ex(CUBE, Vector3((b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2), AX_Y, 0,
                       Vector3(b[3] - b[0], b[4] - b[1], b[5] - b[2]), b[6])
-    for (x, y, z, sx, sz) in [(0, 5.5, -29.95, 40, 0.06), (0, 5.5, 29.95, 40, 0.06), (-29.95, 5.5, 0, 0.06, 40),
-                              (29.95, 5.5, 0, 0.06, 40)]:
-        draw_cube(Vector3(x, y, z), sx, 0.12, sz, C(0, 230, 200))
-    for (x, z) in ((-20, -20), (20, 20), (-20, 20), (20, -20)):
-        draw_cube(Vector3(x, 5.2, z), 3.1, 0.1, 3.1, C(255, 60, 140))
+    for (x, y, z, sx, sz) in [(0, 5.5, -BOUND + 0.05, 2 * BOUND - 2, 0.06), (0, 5.5, BOUND - 0.05, 2 * BOUND - 2, 0.06),
+                              (-BOUND + 0.05, 5.5, 0, 0.06, 2 * BOUND - 2), (BOUND - 0.05, 5.5, 0, 0.06, 2 * BOUND - 2)]:
+        draw_cube(Vector3(x, y, z), sx, 0.12, sz, THEME["accent"])
+    for (x, z) in ((-BOUND + 10, -BOUND + 10), (BOUND - 10, BOUND - 10),
+                   (-BOUND + 10, BOUND - 10), (BOUND - 10, -BOUND + 10)):
+        draw_cube(Vector3(x, 5.2, z), 3.1, 0.1, 3.1, THEME["accent2"])
 
 
 def draw_world_play():
@@ -179,16 +219,18 @@ def draw_world_play():
         if f.alive and f is not viewer:
             draw_circle_3d(Vector3(f.x, f.y + 0.03, f.z), 0.55, AX_X, 90.0, C(0, 0, 0, 90))
     for t in g.tracers:
-        draw_line_3d(Vector3(t[0], t[1], t[2]), Vector3(t[3], t[4], t[5]), C(255, 235, 160))
+        tcol = t[7] if len(t) > 7 and t[7] is not None else C(255, 235, 160)
+        draw_line_3d(Vector3(t[0], t[1], t[2]), Vector3(t[3], t[4], t[5]), tcol)
     for q in g.parts:
         draw_cube(Vector3(q[0], q[1], q[2]), 0.05, 0.05, 0.05, q[7])
     for d in g.drops:
         draw_drop(d)
     for letter, (sx, sz) in bomb.SITES.items():
         active = g.site_plan == letter
+        hot = THEME["accent"] if active else THEME["accent2"]
         draw_circle_3d(Vector3(sx, 0.04, sz), bomb.SITE_R, AX_X, 90.0,
-                       C(0, 230, 200, 45) if active else C(255, 205, 70, 35))
-        draw_circle_3d(Vector3(sx, 0.05, sz), bomb.SITE_R * 0.55, AX_X, 90.0, C(0, 230, 200, 20))
+                       C(hot.r, hot.g, hot.b, 55) if active else C(hot.r, hot.g, hot.b, 35))
+        draw_circle_3d(Vector3(sx, 0.05, sz), bomb.SITE_R * 0.55, AX_X, 90.0, C(hot.r, hot.g, hot.b, 22))
     b = g.bomb
     if b and (b["planted"] or b["dropped"]):
         blink = int(get_time() * 8) % 2 == 0
@@ -325,22 +367,103 @@ _GUN_INSPECT = {
 }
 
 
+_inspect_k = KnivesAnim.inspect_amount
+
+
+def _draw_arm(wrist, side, scale, cuff, shoulder_offset=None, limb_length=1.0):
+    """Bilekten omuza iki kemikli, uzamayan kol."""
+    if shoulder_offset is None:
+        shoulder_offset = (side * 0.17, -0.34, -0.13)
+    shoulder = tuple(wrist[i] + shoulder_offset[i] * scale for i in range(3))
+    dx, dy, dz = shoulder[0] - wrist[0], shoulder[1] - wrist[1], shoulder[2] - wrist[2]
+    dist = math.sqrt(dx * dx + dy * dy + dz * dz) or 0.001
+    upper = 0.205 * scale * limb_length
+    fore = 0.185 * scale * limb_length
+    reach = min(dist, upper + fore - 0.002)
+    ux, uy, uz = dx / dist, dy / dist, dz / dist
+    a = (upper * upper - fore * fore + reach * reach) / (2.0 * reach)
+    h = math.sqrt(max(0.0, upper * upper - a * a))
+    px, py = -uy, ux
+    pn = math.sqrt(px * px + py * py)
+    if pn < 1e-4:
+        px, py, pn = side, 0.0, 1.0
+    elbow = (wrist[0] + ux * a + px / pn * h * side,
+             wrist[1] + uy * a + py / pn * h * side,
+             wrist[2] + uz * a)
+    _box_between(shoulder, elbow, 0.105 * scale, SLEEVE)
+    _box_between(elbow, wrist, 0.092 * scale, SLEEVE)
+    cuff_end = (wrist[0] + ux * 0.055 * scale, wrist[1] + uy * 0.055 * scale,
+                wrist[2] + uz * 0.055 * scale)
+    _box_between(wrist, cuff_end, 0.116 * scale, cuff)
+
+
+def _void_storm_fx(p, base, scale, k, muzzle):
+    if k <= 0.01:
+        return
+    t = p.inspect_t
+    cx = -base[0]
+    cy = base[1] + 0.03
+    cz = base[2] + 0.08
+    ac = C(60, 225, 255)
+    ac2 = C(150, 75, 255)
+    hot = C(225, 255, 255)
+    rl_disable_depth_test()
+    rl_disable_depth_mask()
+    begin_blend_mode(BLEND_ADDITIVE)
+    for i in range(92):
+        seed = (i * 0.61803398875) % 1.0
+        life = (t * 0.60 + seed) % 1.0
+        ang = t * (3.8 + (i % 5) * 0.22) + seed * math.tau * 2.0
+        rad = (0.08 + 0.42 * math.sin(life * math.pi)) * scale
+        rad += 0.035 * math.sin(t * 3.4 + i * 1.7)
+        px = cx + math.cos(ang) * rad
+        py = cy + math.sin(ang) * rad * 0.72 + (life - 0.5) * 0.24 * scale
+        pz = cz + (life - 0.5) * 0.78 * scale + 0.045 * math.cos(ang * 1.6)
+        a = int((45 + 185 * math.sin(life * math.pi)) * k)
+        s = (0.008 + 0.020 * math.sin(life * math.pi)) * scale
+        col = ac2 if i % 7 == 0 else ac
+        draw_cube(Vector3(px, py, pz), s, s, s, C(col.r, col.g, col.b, a))
+        if i % 8 == 0:
+            draw_cube(Vector3(px, py, pz), s * 0.45, s * 0.45, s * 0.45,
+                      C(hot.r, hot.g, hot.b, min(255, int(a * 1.35))))
+    for i in range(28):
+        seed = (i * 0.41421356237) % 1.0
+        life = (t * 0.85 + seed) % 1.0
+        ang = -t * 6.2 + i * math.tau / 28.0
+        rad = (0.045 + 0.075 * life) * scale
+        px = muzzle[0] + math.cos(ang) * rad
+        py = muzzle[1] + math.sin(ang) * rad
+        pz = muzzle[2] + (life - 0.2) * 0.32 * scale
+        a = int(170 * (1.0 - life) * k)
+        s = (0.010 + 0.012 * (1.0 - life)) * scale
+        col = hot if i % 5 == 0 else ac
+        draw_cube(Vector3(px, py, pz), s, s, s, C(col.r, col.g, col.b, a))
+    for i in range(18):
+        seed = (i * 0.73205080757) % 1.0
+        life = (t * 0.50 + seed) % 1.0
+        ang = t * 2.7 + seed * math.tau
+        rad = (0.16 + 0.30 * math.sin(life * math.pi)) * scale
+        z0 = cz + (life - 0.5) * 0.72 * scale
+        a = int(95 * math.sin(life * math.pi) * k)
+        p1 = Vector3(cx + math.cos(ang) * rad, cy + math.sin(ang) * rad * 0.65, z0)
+        p2 = Vector3(cx + math.cos(ang - 0.28) * rad,
+                     cy + math.sin(ang - 0.28) * rad * 0.65,
+                     z0 + 0.13 * scale)
+        draw_line_3d(p1, p2, C(ac.r, ac.g, ac.b, a))
+    pu = 0.5 + 0.5 * math.sin(t * 5.2)
+    draw_sphere(Vector3(cx, cy, cz), (0.075 + 0.045 * pu) * scale,
+                C(ac.r, ac.g, ac.b, int(55 * k)))
+    draw_sphere(Vector3(muzzle[0], muzzle[1], muzzle[2]),
+                (0.06 + 0.05 * pu) * scale, C(ac2.r, ac2.g, ac2.b, int(75 * k)))
+    end_blend_mode()
+    rl_enable_depth_test()
+    rl_enable_depth_mask()
+
+
 def _gun_pose(p, wi):
     w = WEAPONS[wi]
     parts, muz = VM[wi]
     pivot = (0.0, -0.08, 0.02)
-    if p.inspect:
-        t = p.inspect_t
-        spd, ya, pa, ra, dist, sc_t = _GUN_INSPECT.get(wi, (1.0, 0.95, 0.20, 0.24, 0.80, 0.95))
-        k = _smooth(t / 0.35)
-        yaw = math.sin(t * spd) * ya
-        pitch = 0.12 + math.sin(t * spd * 2.0 + 0.9) * pa
-        roll = math.sin(t * spd + 1.7) * ra
-        R = _mm(_rz(roll), _mm(_rx(pitch), _ry(yaw)))
-        bx = lerpf(0.21, 0.02, k)
-        by = lerpf(-0.19, -0.10, k) + math.sin(t * spd * 1.6) * 0.012
-        bz = lerpf(0.38, dist, k) + math.sin(t * spd * 0.8) * 0.010
-        return parts, muz, pivot, R, (bx, by, bz), lerpf(1.0, sc_t, k)
     ads = p.ads
     hip = (0.21, -0.19, 0.38)
     adsp = (0.0, -0.105, 0.33) if not w.scope else hip
@@ -359,28 +482,49 @@ def _gun_pose(p, wi):
         k = cl(p.switch_t / 0.35, 0.0, 1.0)
         by -= 0.3 * k
         ang += 0.8 * k
-    return parts, muz, pivot, _rx(ang), (bx, by, bz), 1.0
+    nbase = (bx, by, bz)
+    nrx = _rx(ang)
+    k = _inspect_k(p)
+    if k <= 0.001:
+        return parts, muz, pivot, nrx, nbase, 1.0, 0.0
+
+    t = p.inspect_t
+    spd, ya, pa, ra, dist, sc_t = _GUN_INSPECT.get(wi, (1.0, 0.95, 0.20, 0.24, 0.80, 0.95))
+    yaw = math.sin(t * spd) * ya
+    pitch = 0.10 + math.sin(t * spd * 2.0 + 0.9) * pa
+    roll = math.sin(t * spd + 1.7) * ra
+    R = _mm(_mm(_rz(roll * k), _mm(_rx(pitch * k), _ry(yaw * k))), nrx)
+    ib = (0.20, -0.10 + math.sin(t * spd * 1.6) * 0.012,
+          dist + math.sin(t * spd * 0.8) * 0.010)
+    base = (lerpf(nbase[0], ib[0], k), lerpf(nbase[1], ib[1], k), lerpf(nbase[2], ib[2], k))
+    return parts, muz, pivot, R, base, lerpf(1.0, sc_t, k), k
 
 
-def draw_viewmodel():
-    p = g.p
+def draw_viewmodel(viewer=None):
+    p = g.p if viewer is None else viewer
+    if p is None:
+        return
     wi = p.weapon
     w = WEAPONS[wi]
     if w.scope and p.ads > 0.85:
         return
-    parts, muz, pivot, R, base, sc = _gun_pose(p, wi)
+    parts, muz, pivot, R, base, sc, insp = _gun_pose(p, wi)
     axis, ang = _axis_angle(_mirror_rot(R))
     back = math.sin(cl(p.cycle, 0.0, 1.0) * math.pi)
-    insp = p.inspect
+    skin = getattr(p, "gun_skin", "none")
     vcam = Camera3D(Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0), 58.0, 0)
     begin_mode_3d(vcam)
     rl_enable_depth_test()
     rl_enable_depth_mask()
     set_view((0, 0, 0), 0.0)
     sf(LIT, LOCS["vm"], 1.0)
-    for part in parts:
+    _set_skin(skin)
+    wrists = []
+    for idx, part in enumerate(parts):
         x, y, z, sx, sy_, sz, col = part[:7]
         tag = part[7] if len(part) > 7 else ""
+        if insp > 0.001 and col is SLEEVE:
+            continue
         dz = z
         if tag and back > 0:
             if tag == "slide":
@@ -391,143 +535,51 @@ def draw_viewmodel():
                 dz -= 0.075 * back
             elif tag == "hammer":
                 dz -= 0.012 * back
-        if insp and wi == 2 and tag == "pump":
+        if insp > 0.001 and wi == 2 and tag == "pump":
             dz -= 0.055 * (0.5 + 0.5 * math.sin(p.inspect_t * 3.2))
-        d = _mv(R, ((x - pivot[0]) * sc, (y - pivot[1]) * sc, (dz - pivot[2]) * sc))
-        pos = Vector3(-(base[0] + pivot[0] + d[0]),
-                      base[1] + pivot[1] + d[1],
-                      base[2] + pivot[2] + d[2])
-        draw_model_ex(CUBE, pos, axis, ang, Vector3(sx * sc, sy_ * sc, sz * sc),
-                      Color(col.r, col.g, col.b, 255))
-    if p.flash > 0 and not insp:
-        d = _mv(R, ((muz[0] - pivot[0]) * sc, (muz[1] - pivot[1]) * sc, (muz[2] - pivot[2]) * sc))
-        fx = -(base[0] + pivot[0] + d[0])
-        fy = base[1] + pivot[1] + d[1]
-        fz = base[2] + pivot[2] + d[2] + 0.05
+        rel = ((x - pivot[0]) * sc, (y - pivot[1]) * sc, (dz - pivot[2]) * sc)
+        d = _mv(R, rel)
+        pos = (-(base[0] + pivot[0] + d[0]),
+               base[1] + pivot[1] + d[1],
+               base[2] + pivot[2] + d[2])
+        if col is GLOVE:
+            wrists.append(pos)
+        pcol = skins.part_color(skin, col, x, y, z, idx)
+        draw_model_ex(CUBE, Vector3(pos[0], pos[1], pos[2]), axis, ang,
+                      Vector3(sx * sc, sy_ * sc, sz * sc),
+                      Color(pcol.r, pcol.g, pcol.b, 255))
+    _set_skin("none")
+    if insp > 0.001 and wrists:
+        cuff = skins.accent(skin)
+        _draw_arm(wrists[0], 1.0, sc, cuff)
+        if len(wrists) > 1:
+            _draw_arm(wrists[-1], -1.0, sc, cuff)
+    d = _mv(R, ((muz[0] - pivot[0]) * sc, (muz[1] - pivot[1]) * sc, (muz[2] - pivot[2]) * sc))
+    mpos = (-(base[0] + pivot[0] + d[0]),
+            base[1] + pivot[1] + d[1],
+            base[2] + pivot[2] + d[2])
+    if insp > 0.001 and skin == "void":
+        _void_storm_fx(p, base, sc, insp, mpos)
+    if p.flash > 0 and insp <= 0.001:
+        fx, fy, fz = mpos[0], mpos[1], mpos[2] + 0.05
+        mc = skins.muzzle_color(skin)
         rl_disable_depth_test()
         begin_blend_mode(BLEND_ADDITIVE)
         s = 0.07 + random.random() * 0.06
-        draw_cube(Vector3(fx, fy, fz), s, s, 0.12, C(255, 190, 80))
-        draw_cube(Vector3(fx, fy, fz), s * 2, s * 0.4, 0.05, C(255, 120, 30))
+        draw_cube(Vector3(fx, fy, fz), s, s, 0.12, C(mc.r, mc.g, mc.b))
+        draw_cube(Vector3(fx, fy, fz), s * 2, s * 0.4, 0.05,
+                  C(min(255, mc.r), max(0, mc.g - 50), max(0, mc.b - 100)))
+        if skins.shader_mode(skin) == 2:
+            draw_sphere(Vector3(fx, fy, fz), 0.10 + random.random() * 0.05,
+                        C(mc.r, mc.g, mc.b, 150))
         end_blend_mode()
         rl_enable_depth_test()
     end_mode_3d()
 
 
-# ---------------------------------------------------------------------------
-#  BICAK viewmodel: sag elde tutus + bicaga ozel inceleme animasyonlari
-# ---------------------------------------------------------------------------
-_KNIFE_RIG = {
-    "knife": dict(pos=(-0.30, -0.22, 0.66), scale=0.62, roll=0.52,
-                  pivot=(0.0, -0.010, -0.130), hand=0.00,
-                  insp=(-0.14, -0.03, 0.84), iscale=0.62),
-    "karambit": dict(pos=(-0.30, -0.23, 0.66), scale=0.55, roll=0.58,
-                     pivot=(0.0, -0.030, -0.370), hand=0.09,
-                     insp=(-0.12, -0.02, 0.88), iscale=0.52),
-    "butterfly": dict(pos=(-0.30, -0.22, 0.66), scale=0.62, roll=0.55,
-                      pivot=(0.0, -0.005, 0.030), hand=0.01,
-                      insp=(-0.14, -0.08, 0.78), iscale=0.70),
-}
-
-
-def _knife_base(kid):
-    return _mm(_rz(_KNIFE_RIG[kid]["roll"]), _ry(math.pi * 0.5))
-
-
-def _knife_slash_A(kid, prog):
-    swing = math.sin(prog * math.pi)
-    if kid == "knife":
-        return _mm(_rz(-swing * 1.15), _mm(_ry(swing * 0.35), _rx(swing * 0.18))), swing
-    if kid == "karambit":
-        # Yavastan hizlanan tam tur: 2*pi bitiste sifir aciya doner.
-        spin = (prog ** 1.55) * (2.0 * math.pi)
-        return _mm(_rz(-spin), _mm(_ry(swing * 0.55), _rx(swing * 0.10))), swing
-    return _mm(_rz(-swing * 1.45), _mm(_ry(swing * 0.45), _rx(swing * 0.16))), swing
-
-
-def _slash_offset(kid, swing):
-    if kid == "knife":
-        return (swing * 0.16, swing * 0.06, swing * 0.06)
-    if kid == "karambit":
-        return (swing * 0.20, swing * 0.08, swing * 0.04)
-    return (swing * 0.18, swing * 0.07, swing * 0.08)
-
-
-_TIP_CACHE = {}
-
-
-def _knife_tip(kid):
-    if kid not in _TIP_CACHE:
-        _axis, parts = knives.model(kid)
-        best = max(parts, key=lambda q: q[2] + q[5] * 0.5)
-        _TIP_CACHE[kid] = (best[0], best[1], best[2] + best[5] * 0.5)
-    return _TIP_CACHE[kid]
-
-
-def _draw_knife_trail(kid, base, B, prog, pivot, scale):
-    tip = _knife_tip(kid)
-    rl_disable_depth_mask()
-    begin_blend_mode(BLEND_ADDITIVE)
-    for i in range(9):
-        pr = max(0.0, prog - i * 0.022)
-        A, sw = _knife_slash_A(kid, pr)
-        off = _slash_offset(kid, sw)
-        gb = (base[0] + off[0], base[1] + off[1], base[2] + off[2])
-        d = ((tip[0] - pivot[0]) * scale, (tip[1] - pivot[1]) * scale,
-             (tip[2] - pivot[2]) * scale)
-        d = _mv(_mm(A, B), d)
-        pos = (gb[0] + d[0], gb[1] + d[1], gb[2] + d[2])
-        f = 1.0 - i / 9.0
-        a = int(150 * f * f)
-        s = 0.030 * (0.35 + 0.65 * f)
-        draw_cube(Vector3(pos[0], pos[1], pos[2]), s, s, s, C(100, 235, 255, a))
-        draw_cube(Vector3(pos[0], pos[1], pos[2]), s * 0.55, s * 0.55, s * 0.55,
-                  C(235, 255, 255, min(255, int(a * 1.4))))
-    end_blend_mode()
-    rl_enable_depth_mask()
-
-
-def _knife_pose(p, kid):
-    rig = _KNIFE_RIG[kid]
-    B = _knife_base(kid)
-    bx, by, bz = rig["pos"]
-    if p.inspect:
-        t = p.inspect_t
-        if kid == "karambit":
-            A = _mm(_rz(t * 3.1), _mm(_ry(0.18 * math.sin(t * 1.7)),
-                                      _rx(0.12 * math.sin(t * 1.3))))
-            bob = (0.0, 0.020 * math.sin(t * 2.2), 0.0)
-        elif kid == "butterfly":
-            A = _mm(_rz(0.52 * math.sin(t * 0.9)), _mm(_ry(0.40 * math.sin(t * 0.63)),
-                                                        _rx(0.14 * math.sin(t * 1.25))))
-            bob = (0.018 * math.sin(t * 0.8), 0.020 * math.sin(t * 1.6),
-                   0.010 * math.sin(t * 1.1))
-        else:
-            A = _mm(_rz(t * 2.2), _mm(_ry(0.16 * math.sin(t * 1.4)),
-                                      _rx(0.10 * math.sin(t * 1.1))))
-            bob = (0.0, 0.015 * math.sin(t * 1.7), 0.0)
-        k = _smooth(t / 0.30)
-        ix, iy, iz = rig["insp"]
-        bx = lerpf(-0.26, ix, k) + bob[0]
-        by = lerpf(-0.24, iy, k) + bob[1]
-        bz = lerpf(0.58, iz, k) + bob[2]
-        return (bx, by, bz), _mm(A, B), lerpf(rig["scale"], rig["iscale"], k)
-    bx += -(p.sway if cfg["sway"] else 0.0)
-    by += (p.swayy if cfg["sway"] else 0.0)
-    bob = p.bobamp if cfg["bob"] else 0.0
-    bx += math.cos(p.bobt) * 0.008 * bob
-    by += -abs(math.sin(p.bobt)) * 0.012 * bob
-    by -= p.land * 0.4
-    if p.slash_t > 0:
-        prog = 1.0 - p.slash_t / 0.30
-        A, swing = _knife_slash_A(kid, prog)
-        off = _slash_offset(kid, swing)
-        return (bx + off[0], by + off[1], bz + off[2]), _mm(A, B), rig["scale"]
-    return (bx, by, bz), B, rig["scale"]
-
-
-def _draw_knife_group(parts, base, R, pivot, scale, hinge, alpha, hinge_b=0.0):
-    for part in parts:
+def _draw_knife_group(parts, base, R, pivot, scale, hinge, alpha, hinge_b=0.0,
+                      skin="none"):
+    for idx, part in enumerate(parts):
         x, y, z, sx, sy, sz, col = part[:7]
         tag = part[7] if len(part) > 7 else ""
         Rh = _IDENT
@@ -538,16 +590,17 @@ def _draw_knife_group(parts, base, R, pivot, scale, hinge, alpha, hinge_b=0.0):
         d = ((x - pivot[0]) * scale, (y - pivot[1]) * scale, (z - pivot[2]) * scale)
         if Rh is not _IDENT:
             d = _mv(Rh, d)
-        d = _mv(R, d)
         Rp = _mm(R, Rh)
+        d = _mv(R, d)
+        pcol = skins.part_color(skin, col, x, y, z, idx)
         axis, ang = _axis_angle(Rp)
         draw_model_ex(CUBE, Vector3(base[0] + d[0], base[1] + d[1], base[2] + d[2]),
                       axis, ang, Vector3(sx * scale, sy * scale, sz * scale),
-                      Color(col.r, col.g, col.b, alpha))
+                      Color(pcol.r, pcol.g, pcol.b, alpha))
 
 
-def _draw_knife_hand(base, B, kid, scale):
-    rig = _KNIFE_RIG[kid]
+def _draw_knife_hand(base, B, kid, scale, skin="none"):
+    rig = KnivesAnim.KNIFE_RIG[kid]
     hdir = _mv(B, (0.0, 0.0, -1.0))
     off = rig["hand"] * scale
     palm = (base[0] + hdir[0] * off, base[1] + hdir[1] * off, base[2] + hdir[2] * off)
@@ -556,25 +609,31 @@ def _draw_knife_hand(base, B, kid, scale):
         u = (0.02 + i * 0.05) * scale
         fp = (palm[0] + hdir[0] * u, palm[1] + hdir[1] * u, palm[2] + hdir[2] * u - 0.055 * scale)
         _box(fp, B, (0.095 * scale, 0.042 * scale, 0.042 * scale), GLOVE)
+    thumb_offset = _mv(B, (rig["thumb_side"] * 0.065 * scale, 0.0, -0.005 * scale))
+    thumb = (palm[0] + thumb_offset[0], palm[1] + thumb_offset[1],
+             palm[2] + thumb_offset[2])
+    thumb_rotation = _mm(B, _ry(rig["thumb_side"] * rig["thumb_angle"]))
+    _box(thumb, thumb_rotation, (0.042 * scale, 0.046 * scale, 0.095 * scale), GLOVE)
     if kid == "karambit":
         _box((base[0], base[1], base[2] - 0.045 * scale), _IDENT,
              (0.042 * scale, 0.042 * scale, 0.14 * scale), GLOVE)
     wrist = (palm[0] + hdir[0] * 0.10 * scale, palm[1] + hdir[1] * 0.10 * scale,
              palm[2] + hdir[2] * 0.10 * scale)
-    elbow = (wrist[0] - 0.30 * scale, wrist[1] - 0.38 * scale, wrist[2] - 0.10 * scale)
-    acc = knives.by_id(kid).color
-    _box_between(wrist, elbow, 0.105 * scale, SLEEVE)
-    _box_between(wrist, (wrist[0] - 0.06 * scale, wrist[1] - 0.075 * scale,
-                         wrist[2] - 0.018 * scale), 0.118 * scale, acc)
+    acc = skins.accent(skin) if skin != "none" else knives.by_id(kid).color
+    _draw_arm(wrist, rig["arm_side"], scale, acc,
+              rig["arm_offset"], rig["arm_length"])
 
 
-def draw_knife_viewmodel():
-    p = g.p
+def draw_knife_viewmodel(viewer=None):
+    p = g.p if viewer is None else viewer
+    if p is None:
+        return
     kid = p.knife
-    rig = _KNIFE_RIG[kid]
-    base, R, sc = _knife_pose(p, kid)
-    B = _knife_base(kid)
+    rig = KnivesAnim.KNIFE_RIG[kid]
+    base, R, sc, insp = KnivesAnim.knife_pose(p, kid)
+    B = KnivesAnim.knife_base(kid)
     _axis_name, parts = knives.model(kid)
+    skin = getattr(p, "knife_skin", "none")
     hinge = p.hinge_a if kid == "butterfly" else 0.0
     hinge_b = p.hinge_b if kid == "butterfly" else 0.0
     vcam = Camera3D(Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0), 58.0, 0)
@@ -583,19 +642,25 @@ def draw_knife_viewmodel():
     rl_enable_depth_mask()
     set_view((0, 0, 0), 0.0)
     sf(LIT, LOCS["vm"], 1.0)
-    _draw_knife_hand(base, B, kid, sc)
-    if p.slash_t > 0 and not p.inspect:
-        prog = 1.0 - p.slash_t / 0.30
-        cur = _slash_offset(kid, math.sin(prog * math.pi))
-        gbase = (base[0] - cur[0], base[1] - cur[1], base[2] - cur[2])
+    _set_skin("none")
+    _draw_knife_hand(base, B, kid, sc, skin)
+    if p.slash_t > 0 and insp <= 0.001:
+        prog, current_offset, ghosts = KnivesAnim.slash_ghosts(kid, p.slash_t)
+        trail = skins.accent(skin) if skin != "none" else knives.by_id(kid).color
+        KnivesAnim.draw_slash_trail(kid, base, B, prog, rig["pivot"], sc, trail)
+        gbase = tuple(base[i] - current_offset[i] for i in range(3))
         rl_disable_depth_mask()
-        for back, alpha in ((0.18, 25), (0.10, 45), (0.04, 70)):
-            A, sw = _knife_slash_A(kid, max(0.0, prog - back))
-            off = _slash_offset(kid, sw)
+        for _back, alpha, A, swing in ghosts:
+            off = KnivesAnim.slash_offset(kid, swing)
             gb = (gbase[0] + off[0], gbase[1] + off[1], gbase[2] + off[2])
-            _draw_knife_group(parts, gb, _mm(A, B), rig["pivot"], sc, 0.0, alpha)
+            _draw_knife_group(parts, gb, _mm(A, B), rig["pivot"], sc, 0.0, alpha,
+                              skin=skin)
         rl_enable_depth_mask()
-    _draw_knife_group(parts, base, R, rig["pivot"], sc, hinge, 255, hinge_b)
+    _set_skin(skin)
+    _draw_knife_group(parts, base, R, rig["pivot"], sc, hinge, 255, hinge_b,
+                      skin=skin)
+    _set_skin("none")
+    KnivesAnim.draw_inspect_fx(p, kid, base, sc, insp)
     end_mode_3d()
 
 
@@ -628,7 +693,7 @@ def play_camera():
 
 def menu_camera():
     t = get_time() * 0.12
-    return Camera3D(Vector3(math.cos(t) * 40, 15, math.sin(t) * 40), Vector3(0, 1.5, 0), Vector3(0, 1, 0), 55.0, 0)
+    return Camera3D(Vector3(math.cos(t) * 54, 18, math.sin(t) * 54), Vector3(0, 1.5, 0), Vector3(0, 1, 0), 55.0, 0)
 
 
 def preview_camera():
@@ -659,13 +724,16 @@ def render_scene():
         draw_body(100, 0, 100, math.sin(get_time() * 0.8) * 0.7 + 0.2, ch.color, 3, 0.0, 0.0, 0.0)
     end_mode_3d()
     end_texture_mode()
-    if st == "play" and g.p.alive:
+    viewer = g.p
+    if viewer is not None and not viewer.alive and g.spec is not None and g.spec.alive:
+        viewer = g.spec
+    if st == "play" and viewer is not None and viewer.alive:
         begin_texture_mode(g.vmrt)
         clear_background(BLANK)
-        if g.p.knife_active:
-            draw_knife_viewmodel()
+        if viewer.knife_active:
+            draw_knife_viewmodel(viewer)
         else:
-            draw_viewmodel()
+            draw_viewmodel(viewer)
         end_texture_mode()
         begin_texture_mode(g.rt)
         rl_disable_depth_test()

@@ -16,6 +16,7 @@ g.edit = -1
 g.locked = False
 g.skip_mouse = 0
 g.back = "main"
+g.shop_tab = 0
 g.quit = False
 
 # mac ayarlari
@@ -23,7 +24,9 @@ g.ally_bots = 4
 g.enemy_bots = 5
 g.diff = 2
 g.mode = 0
-g.target = 5
+g.target = 12
+g.map_pick = -1
+g.map_name = ""
 g.names = ["Kuzgun", "Pars", "Tilki", "Bozkurt", "Ejder", "Firtina", "Golge", "Oyuncu",
            "Akrep", "Kartal", "Yilan", "Panter", "Bogaz"]
 
@@ -45,6 +48,9 @@ g.kills_show = []
 g.hurt = g.hitm = g.hit_t = g.dig = 0.0
 g.hit_from = (0, 0)
 g.hitm_k = False
+g.assist_t = 0.0
+g.assist_name = ""
+g.side_t = 0.0
 
 # mac durumu
 g.money = 0
@@ -63,6 +69,7 @@ g.phase = "freeze"
 g.phase_t = 0
 g.round_t = 60
 g.round = 0
+g.half = 0
 g.site_plan = "A"
 g.atk_wins = 0
 g.dfn_wins = 0

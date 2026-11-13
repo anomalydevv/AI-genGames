@@ -10,6 +10,10 @@ class F:
     def __init__(s, name, col, player=False, team=0):
         s.name, s.col, s.player, s.team = name, col, player, team
         s.kills = s.deaths = s.wins = s.round_kills = 0
+        s.assists = 0
+        s.dmg_by = {}
+        s.diff = 2
+        s.greed = random.random()
         s.money = 800
         s.burst_left = 0
         s.burst_pause = 0.0
@@ -37,10 +41,15 @@ class F:
         s.think = random.random() * 0.2
         s.stuck_t = 0.0
         s.lastpos = (0, 0)
+        s.afk_t = 0.0
+        s.roam_t = 0.0
+        s.roam_ang = 0.0
         s.site_target = "A"
         # bicak
         s.knife = "knife"
         s.knife_active = False
+        s.gun_skin = "none"
+        s.knife_skin = "none"
         s.slash_t = 0.0
         s.slash_cd = 0.0
         s.slash_n = 0
@@ -53,6 +62,7 @@ class F:
         s.slots = [None, None]
         s.inspect = False
         s.inspect_t = 0.0
+        s.inspect_out = 0.0
         s.cycle = 0.0
         s.bobt = 0.0
         s.ads = 0.0
@@ -86,6 +96,12 @@ class F:
         s.path = []
         s.lost_t = 0.0
         s.round_kills = 0
+        s.dmg_by = {}
+        s.stuck_t = 0.0
+        s.lastpos = (x, z)
+        s.afk_t = 0.0
+        s.roam_t = 0.0
+        s.roam_ang = 0.0
         s.knife_active = False
         s.slash_t = 0.0
         s.slash_cd = 0.0
@@ -97,6 +113,7 @@ class F:
         s.hinge_bv = 0.0
         s.inspect = False
         s.inspect_t = 0.0
+        s.inspect_out = 0.0
         s.cycle = 0.0
 
 

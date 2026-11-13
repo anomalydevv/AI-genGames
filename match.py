@@ -8,7 +8,9 @@ from pyray import *
 import bomb
 import characters
 import knives
+import KnivesAnim
 import playerdata
+import skins
 import ui
 from AI import bot_buy, bot_update
 from combat import apply_damage, shoot
@@ -16,11 +18,48 @@ from config import C, CYAN, DEG, cl, cfg, lerpf
 from fighter import F, look
 from physics import los, phys
 from state import g
-from weapons import WEAPONS, slot_of
-from world import SPAWNS_ATK, SPAWNS_DFN
+from weapons import DIFFS, WEAPONS, slot_of
+from world import MAPS, SPAWNS_ATK, SPAWNS_DFN, select_map
 
 ALLY_COLS = [C(90, 160, 255), C(120, 255, 220), C(160, 200, 255), C(80, 220, 255)]
 ENEMY_COLS = [C(255, 90, 90), C(255, 150, 60), C(255, 100, 160), C(220, 80, 80), C(255, 180, 90)]
+
+
+def _balanced_skills(n_ally, n_enemy):
+    """Zorluga gore bot becerilerini iki takima dengeli dagitir.
+
+    En iyi bot her mac rastgele bir takima duser; kalan botlar takim gucu
+    esitlenerek paylastirilir. Oyuncu, muttefik tarafin gucune sayilir.
+    """
+    top = len(DIFFS) - 1
+    pool = [max(0, min(top, g.diff + random.choice((-1, 0, 0, 1)))) for _ in range(n_ally + n_enemy)]
+    pool.sort(reverse=True)
+    ally, enemy = [], []
+    sa, se = 2.0, 0.0
+    first_ally = random.random() < 0.5
+    for i, sk in enumerate(pool):
+        can_a, can_e = len(ally) < n_ally, len(enemy) < n_enemy
+        if not can_a:
+            pick_a = False
+        elif not can_e:
+            pick_a = True
+        elif i == 0:
+            pick_a = first_ally
+        else:
+            pick_a = sa <= se
+        if pick_a:
+            ally.append(sk)
+            sa += sk
+        else:
+            enemy.append(sk)
+            se += sk
+    return ally, enemy
+
+
+def inspect_off(f):
+    if f.inspect:
+        f.inspect = False
+        f.inspect_out = KnivesAnim.INSPECT_OUT_TIME
 
 
 def spectate_targets():
@@ -44,28 +83,59 @@ def spectate_cycle(step=1):
     g.spec = targets[i]
 
 
+def _refresh_cols():
+    p = g.p
+    ai = ei = 0
+    for f in g.FS:
+        if f.player:
+            f.col = CYAN
+        elif f.team == p.team:
+            f.col = ALLY_COLS[ai % len(ALLY_COLS)]
+            ai += 1
+        else:
+            f.col = ENEMY_COLS[ei % len(ENEMY_COLS)]
+            ei += 1
+
+
+def swap_sides():
+    for f in g.FS:
+        f.team = 1 - f.team
+    g.atk_wins, g.dfn_wins = g.dfn_wins, g.atk_wins
+    g.half += 1
+    g.side_t = 4.0
+    _refresh_cols()
+
+
 def start_match():
     pd = playerdata.data()
     g.char = characters.index_of(pd.get("character", "hex"))
     g.target = max(1, min(30, int(g.target)))
     g.ally_bots = max(0, min(4, int(g.ally_bots)))
     g.enemy_bots = max(0, min(5, int(g.enemy_bots)))
+    pick = g.map_pick if 0 <= g.map_pick < len(MAPS) else random.randrange(len(MAPS))
+    g.map_name = select_map(pick)
     g.atk_wins = 0
     g.dfn_wins = 0
     g.FS = []
     g.p = F(g.names[7].strip() or "Oyuncu", CYAN, True, 0)
     g.p.knife = knives.by_id(pd.get("knife", "knife")).kid
+    skins.apply(g.p, pd)
     g.p.slots = [None, 0]
     g.p.weapon = 0
     g.p.knife_active = False
     g.FS.append(g.p)
     g.spec = None
+    ally_sk, enemy_sk = _balanced_skills(g.ally_bots, g.enemy_bots)
     for i in range(g.ally_bots):
         nm = g.names[i].strip() or "Müttefik%d" % (i + 1)
-        g.FS.append(F(nm, ALLY_COLS[i % len(ALLY_COLS)], False, 0))
+        f = F(nm, ALLY_COLS[i % len(ALLY_COLS)], False, 0)
+        f.diff = ally_sk[i]
+        g.FS.append(f)
     for i in range(g.enemy_bots):
         nm = (g.names[8 + i].strip() if 8 + i < len(g.names) else "") or "Düşman%d" % (i + 1)
-        g.FS.append(F(nm, ENEMY_COLS[i % len(ENEMY_COLS)], False, 1))
+        f = F(nm, ENEMY_COLS[i % len(ENEMY_COLS)], False, 1)
+        f.diff = enemy_sk[i]
+        g.FS.append(f)
     g.kills_show = []
     g.money = 1000
     g.ult = 0.0
@@ -80,6 +150,8 @@ def start_match():
     g.wave_t = 0.0
     g.wave_hit = set()
     g.round = 0
+    g.half = 0
+    g.side_t = 0.0
     g.feed = []
     g.drops = []
     g.paused = False
@@ -94,6 +166,7 @@ def start_match():
     g.souls_earned = 0
     g.winner_team = None
     g.explode_t = 0.0
+    _refresh_cols()
     start_round()
     g.state = "play"
 
@@ -127,6 +200,7 @@ def start_round():
     p.cycle = 0.0
     p.inspect = False
     p.inspect_t = 0.0
+    p.inspect_out = 0.0
     p.slash_t = 0.0
     for si in (0, 1):
         if p.slots[si] not in p.owned:
@@ -134,7 +208,10 @@ def start_round():
     if p.slots[1] is None:
         p.slots[1] = 0
     g.spec = None
-    bomb.new_round(p)
+    sx = sum(p[0] for p in SPAWNS_ATK) / len(SPAWNS_ATK)
+    sz = sum(p[1] for p in SPAWNS_ATK) / len(SPAWNS_ATK)
+    ang = random.random() * math.tau
+    bomb.new_round(sx + math.cos(ang) * 0.9, sz + math.sin(ang) * 0.9)
     g.phase = "freeze"
     g.phase_t = 5.0
     g.round_t = 60.0
@@ -195,6 +272,33 @@ def start_reload(f):
         f.reload_t = w.reload
 
 
+def nearest_drop(p, radius=2.0):
+    best, bd = None, radius * radius
+    for d in g.drops:
+        dd = (d["x"] - p.x) ** 2 + (d["z"] - p.z) ** 2
+        if dd < bd:
+            bd, best = dd, d
+    return best
+
+
+def pickup_drop(p):
+    d = nearest_drop(p)
+    if d is None:
+        return
+    wi = d["wi"]
+    p.owned.add(wi)
+    p.slots[slot_of(wi)] = wi
+    p.weapon = wi
+    p.knife_active = False
+    inspect_off(p)
+    p.switch_t = 0.35
+    p.reload_t = 0.0
+    if 0 <= wi < len(p.mag):
+        p.mag[wi] = max(1, int(d.get("mag", WEAPONS[wi].mag)))
+        p.res[wi] = max(0, int(d.get("res", WEAPONS[wi].res)))
+    g.drops.remove(d)
+
+
 def _use_character_c(p, frozen):
     ch = characters.get(g.char)
     kind = ch.c.kind
@@ -230,7 +334,7 @@ def player_update(dt):
     frozen = g.phase == "freeze"
     p.flash = max(0, p.flash - dt)
     p.inv = max(0, p.inv - dt)
-    p.slash_t = max(0.0, p.slash_t - dt)
+    KnivesAnim.update_slash(p, dt)
     p.slash_cd = max(0.0, p.slash_cd - dt)
     p.kick = max(0, p.kick - dt * 14 * (0.4 + p.kick * 0.15))
     p.land = max(0, p.land - dt * 0.6)
@@ -247,35 +351,7 @@ def player_update(dt):
         p.vx = p.vz = 0
         phys(p, dt)
         return
-    p.inspect_t += dt
-    # kelebek bicak mentese fizigi: kanatlar sirayla acilip kapanir
-    if p.knife_active and p.knife == "butterfly":
-        ta = tb = 0.0
-        if p.inspect:
-            t = p.inspect_t % 3.6
-            if t < 0.5:
-                ta = 1.30
-            elif t < 1.0:
-                ta = 0.0
-            elif t < 1.5:
-                tb = 1.30
-            elif t < 2.0:
-                tb = 0.0
-            elif t < 2.4:
-                ta = 1.30
-            elif t < 2.8:
-                ta = 0.0
-        p.hinge_v += (ta - p.hinge_a) * 140.0 * dt
-        p.hinge_v *= max(0.0, 1.0 - 16.0 * dt)
-        p.hinge_a += p.hinge_v * dt
-        p.hinge_a = cl(p.hinge_a, -0.18, 1.45)
-        p.hinge_bv += (tb - p.hinge_b) * 140.0 * dt
-        p.hinge_bv *= max(0.0, 1.0 - 16.0 * dt)
-        p.hinge_b += p.hinge_bv * dt
-        p.hinge_b = cl(p.hinge_b, -0.18, 1.45)
-    else:
-        p.hinge_a = p.hinge_b = 0.0
-        p.hinge_v = p.hinge_bv = 0.0
+    KnivesAnim.update(p, dt)
     p.cycle = max(0.0, p.cycle - dt * 9.0)
     p.ghost = max(0.0, p.ghost - dt)
     if g.ult_t > 0 and g.ult_kind == "ult_stealth":
@@ -340,8 +416,7 @@ def player_update(dt):
     p.swayy += (cl(md.y * 0.0012, -0.04, 0.04) - p.swayy) * min(1, dt * 10)
     # silah yuvalari: 1 = ana silah, 2 = tabanca, 3 = bicak
     if is_key_pressed(KEY_Y):
-        p.inspect = not p.inspect
-        p.inspect_t = 0.0
+        KnivesAnim.toggle_inspect(p)
         p.switch_t = 0.0
         p.slash_t = 0.0
         p.reload_t = 0.0
@@ -353,12 +428,12 @@ def player_update(dt):
             p.reload_t = 0
             p.switch_t = 0.35
             p.knife_active = False
-            p.inspect = False
+            inspect_off(p)
     if is_key_pressed(KEY_THREE) or is_key_pressed(KEY_ZERO):
         p.knife_active = True
         p.reload_t = 0
         p.switch_t = 0.35
-        p.inspect = False
+        inspect_off(p)
     wh = get_mouse_wheel_move()
     if wh != 0:
         order = []
@@ -377,7 +452,7 @@ def player_update(dt):
             p.knife_active = False
         p.reload_t = 0
         p.switch_t = 0.35
-        p.inspect = False
+        inspect_off(p)
     w = WEAPONS[p.weapon]
     p.switch_t = max(0, p.switch_t - dt)
     p.cd -= dt
@@ -389,24 +464,29 @@ def player_update(dt):
             p.mag[p.weapon] += take
             p.res[p.weapon] -= take
     if is_key_pressed(KEY_R):
-        p.inspect = False
+        inspect_off(p)
         start_reload(p)
     # bomba kurma
     if is_key_down(KEY_E) and g.phase == "live":
-        p.inspect = False
+        inspect_off(p)
         if p.team == 0:
             bomb.update_plant(p, dt)
         else:
             bomb.update_defuse(p, dt)
+    if is_key_pressed(KEY_F):
+        picked = bomb.try_pickup(p)
+        if not picked and not frozen:
+            pickup_drop(p)
+            w = WEAPONS[p.weapon]
     # ates / bicak
     if p.knife_active:
         if is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-            p.inspect = False
+            inspect_off(p)
             knives.try_slash(p)
     else:
         fire = is_mouse_button_down(MOUSE_BUTTON_LEFT) if w.auto else is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
         if fire and p.cd <= 0 and p.reload_t <= 0 and p.switch_t <= 0 and not frozen:
-            p.inspect = False
+            inspect_off(p)
             if p.mag[p.weapon] > 0:
                 spread = lerpf(w.hip, w.ads, p.ads) + sp * 0.1 + (2.0 if not p.grounded else 0) + p.heat
                 shoot(p, spread, 1.25 if g.ult_t > 0 else 1.0)
@@ -492,6 +572,8 @@ def update_play(dt):
             return
         g.market = False
     g.hurt = max(0, g.hurt - dt * 1.8)
+    g.assist_t = max(0.0, g.assist_t - dt)
+    g.side_t = max(0.0, g.side_t - dt)
     g.hitm = max(0, g.hitm - dt)
     g.hit_t = max(0, g.hit_t - dt)
     g.soul_t = max(0, g.soul_t - dt)
@@ -524,12 +606,15 @@ def update_play(dt):
             end_round(0, "BOMB")
         elif b and b.get("defused"):
             end_round(1, "DEFUSE")
-        elif b and not b["planted"]:
+        else:
             atk_alive = any(f.alive and f.team == 0 for f in g.FS)
             dfn_alive = any(f.alive and f.team == 1 for f in g.FS)
-            if not atk_alive:
+            if b and b["planted"]:
+                if not dfn_alive:
+                    end_round(0, "ELIM")
+            elif not atk_alive:
                 end_round(1, "ELIM")
-            elif not dfn_alive and g.enemy_bots > 0:
+            elif not dfn_alive:
                 end_round(0, "ELIM")
             elif g.round_t <= 0:
                 end_round(1, "TIME")
@@ -538,6 +623,8 @@ def update_play(dt):
             if g.atk_wins >= g.target or g.dfn_wins >= g.target:
                 finish_match()
             else:
+                if g.round % 11 == 0:
+                    swap_sides()
                 start_round()
             return
     player_update(dt)

@@ -15,6 +15,7 @@ uniform mat4 matNormal;
 
 out vec3 fragPosition;
 out vec3 fragNormal;
+out vec3 fragLocal;
 out vec4 fragColor;
 
 void main()
@@ -23,6 +24,7 @@ void main()
 
     fragPosition = worldPosition.xyz;
     fragNormal = normalize(mat3(matNormal) * vertexNormal);
+    fragLocal = matModel[3].xyz + vertexPosition;
     fragColor = vertexColor;
 
     gl_Position = mvp * vec4(vertexPosition, 1.0);
@@ -33,12 +35,16 @@ FS_LIT = """#version 330
 
 in vec3 fragPosition;
 in vec3 fragNormal;
+in vec3 fragLocal;
 in vec4 fragColor;
 
 uniform vec4 colDiffuse;
 uniform vec3 viewPos;
 uniform float pattern;
 uniform float vm;
+uniform float skinMode;
+uniform vec3 skinA;
+uniform vec3 skinB;
 
 out vec4 finalColor;
 
@@ -142,6 +148,60 @@ void main()
         ao *= mix(0.58, 1.0, heightAO);
 
         roughness = 0.88;
+    }
+
+    // Python tarafindan secilen prosedurel kaplama (viewmodel).
+    if (skinMode > 0.5)
+    {
+        vec3 lp = fragLocal;
+        float lum = dot(base, vec3(0.299, 0.587, 0.114));
+        vec3 rec = mix(skinB, skinA, smoothstep(0.06, 0.82, lum));
+
+        if (skinMode < 1.5)
+        {
+            float stripes = sin(lp.x * 34.0 + lp.y * 9.0 + lp.z * 23.0 + noise(lp.xy * 17.0) * 6.0);
+            rec = mix(skinB * 0.52, skinA, smoothstep(-0.30, 0.82, stripes));
+            rec = mix(rec, vec3(1.0, 0.86, 0.52), smoothstep(0.62, 1.0, lum) * 0.38);
+            roughness = 0.64;
+        }
+        else if (skinMode < 2.5)
+        {
+            float vein = abs(sin(lp.x * 27.0 + lp.z * 33.0 + fbm(lp.xy * 10.0) * 7.0));
+            rec = mix(skinB, skinA, smoothstep(0.10, 0.96, lum) * 0.64);
+            rec += skinA * pow(1.0 - vein, 11.0) * 0.85;
+            rec *= 0.84 + 0.20 * noise(lp.xz * 61.0);
+            roughness = 0.34;
+        }
+        else if (skinMode < 3.5)
+        {
+            vec2 grid = abs(fract(lp.xy * 13.0) - 0.5);
+            float line = 1.0 - smoothstep(0.0, 0.055, min(grid.x, grid.y));
+            rec = mix(skinB, skinA, line * 0.72 + smoothstep(0.35, 0.95, lum) * 0.35);
+            roughness = 0.46;
+        }
+        else if (skinMode < 4.5)
+        {
+            float crack = abs(sin(lp.x * 21.0 + lp.z * 29.0 + fbm(lp.yz * 13.0) * 5.0));
+            rec = mix(skinB, skinA, pow(1.0 - crack, 9.0) * 0.85);
+            rec = mix(rec, vec3(1.0, 0.48, 0.28), smoothstep(0.70, 1.0, lum) * 0.28);
+            roughness = 0.52;
+        }
+        else if (skinMode < 5.5)
+        {
+            float shard = sin(lp.x * 23.0 + lp.y * 17.0) * cos(lp.z * 19.0 - lp.x * 8.0);
+            rec = mix(skinB, skinA, smoothstep(-0.15, 0.85, shard) * 0.68);
+            rec = mix(rec, vec3(0.90, 0.98, 1.0), smoothstep(0.72, 1.0, lum) * 0.32);
+            roughness = 0.22;
+        }
+        else
+        {
+            float crack = abs(sin(lp.x * 19.0 + lp.z * 31.0 + fbm(lp.xy * 15.0) * 6.0));
+            rec = mix(skinB, skinA, pow(1.0 - crack, 8.0) * 0.88);
+            rec += vec3(0.45, 0.11, 0.02) * pow(1.0 - crack, 15.0);
+            roughness = 0.48;
+        }
+
+        base = rec;
     }
 
     // Directional lighting.

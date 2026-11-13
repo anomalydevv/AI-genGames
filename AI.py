@@ -382,11 +382,16 @@ def _pickup(b):
 
     cur = WEAPONS[b.weapon].price
 
-    best, bd = None, 1.7 ** 2
+    greed = getattr(b, "greed", 0.5)
+
+    best, bd = None, 2.4 ** 2
 
     for d in g.drops:
+        wd = WEAPONS[d["wi"]]
 
-        if WEAPONS[d["wi"]].price <= cur:
+        want = wd.price > cur or (wd.price >= 600 and greed > 0.55)
+
+        if not want:
 
             continue
 
@@ -436,7 +441,9 @@ def bot_update(b, dt):
 
         return
 
-    D = DIFFS[g.diff][1]
+    b_diff = getattr(b, "diff", g.diff)
+
+    D = DIFFS[b_diff][1]
 
     w = WEAPONS[b.weapon]
 
@@ -445,6 +452,10 @@ def bot_update(b, dt):
     if g.phase == "freeze":
 
         b.vx = b.vz = 0
+
+        b.scan = getattr(b, "scan", random.random() * 6.0) + dt
+
+        b.yaw += math.sin(b.scan * 1.1) * 0.5 * dt
 
         phys(b, dt)
 
@@ -484,7 +495,7 @@ def bot_update(b, dt):
 
         b.strafe_t = 0.25 + random.random() * 0.4
 
-        if b.target is None and g.diff >= 1:
+        if b.target is None and b_diff >= 1:
 
             src = _nearest_enemy(b, 30.0)
 
@@ -504,7 +515,7 @@ def bot_update(b, dt):
 
     if b.think <= 0:
 
-        b.think = 0.05 if g.diff >= 4 else (0.12 if g.diff >= 2 else 0.2)
+        b.think = 0.05 if b_diff >= 4 else (0.12 if b_diff >= 2 else 0.2)
 
         best = _acquire(b, D)
 
@@ -528,7 +539,7 @@ def bot_update(b, dt):
 
             # Ayak sesi: gorunmeyen ama yakin ve hareketli dusman
 
-            if g.diff >= 2 and b.lost_t < 1.0:
+            if b_diff >= 2 and b.lost_t < 1.0:
 
                 heard = _hear(b)
 
@@ -598,7 +609,7 @@ def bot_update(b, dt):
 
         elif bomb and bomb.get("dropped"):
 
-            atk = [f for f in g.FS if f.alive and f.team == 0]
+            atk = [f for f in g.FS if f.alive and f.team == 0 and not f.player]
 
             closest = min(atk, key=lambda f: (f.x - bomb["x"]) ** 2 + (f.z - bomb["z"]) ** 2) if atk else b
 
@@ -760,19 +771,19 @@ def bot_update(b, dt):
 
                 if b.burst_left <= 0:
 
-                    b.burst_pause = (0.14 + random.random() * 0.16) if g.diff >= 4 else (0.24 + random.random() * 0.32)
+                    b.burst_pause = (0.14 + random.random() * 0.16) if b_diff >= 4 else (0.24 + random.random() * 0.32)
 
                     b.cd = 0.0
 
                 else:
 
-                    jit = 0.18 if g.diff >= 4 else 0.45
+                    jit = 0.18 if b_diff >= 4 else 0.45
 
                     b.cd = w.rof * (1.0 + random.random() * jit)
 
             else:
 
-                jit = 0.25 if g.diff >= 4 else 0.6
+                jit = 0.25 if b_diff >= 4 else 0.6
 
                 b.cd = w.rof * (1.0 + random.random() * jit)
 
@@ -808,10 +819,6 @@ def bot_update(b, dt):
 
             want_move = False
 
-            b.scan = getattr(b, "scan", random.random() * 6.0) + dt
-
-            b.yaw += math.sin(b.scan * 1.3) * 0.7 * dt  # etrafi tara
-
         else:
 
             dx, dz = _navigate(b, aim[0], aim[1], dt, D["turn"])
@@ -833,6 +840,46 @@ def bot_update(b, dt):
                 else:
 
                     want_move = False
+
+        if not hunting and not carrier:
+
+            moving = abs(mvx) + abs(mvz) > 0.01
+
+            if getattr(b, "roam_t", 0.0) > 0.0:
+
+                b.roam_t -= dt
+
+                ang = getattr(b, "roam_ang", 0.0)
+
+                mvx, mvz = math.sin(ang), math.cos(ang)
+
+                want_move = True
+
+                if b.roam_t <= 0.0:
+
+                    b.afk_t = 0.0
+
+            elif moving:
+
+                b.afk_t = 0.0
+
+            else:
+
+                b.afk_t = getattr(b, "afk_t", 0.0) + dt
+
+                if b.afk_t > 1.2:
+
+                    b.roam_t = 0.28 + random.random() * 0.3
+
+                    b.roam_ang = random.random() * math.tau
+
+                    b.afk_t = 0.0
+
+        if not hunting and abs(mvx) + abs(mvz) < 0.01:
+
+            b.scan = getattr(b, "scan", random.random() * 6.0) + dt
+
+            b.yaw += math.sin(b.scan * 1.3) * 0.7 * dt
 
         if b.lost_t > 0:
 
@@ -866,7 +913,15 @@ def bot_update(b, dt):
 
         sd = getattr(b, "unstick_dir", 1.0)
 
-        mvx, mvz = -mvz * sd + mvx * 0.3, mvx * sd + mvz * 0.3
+        if abs(mvx) + abs(mvz) < 0.05:
+
+            ang = random.random() * math.tau
+
+            mvx, mvz = math.sin(ang), math.cos(ang)
+
+        else:
+
+            mvx, mvz = -mvz * sd + mvx * 0.3, mvx * sd + mvz * 0.3
 
 
 
@@ -918,11 +973,13 @@ def bot_update(b, dt):
 
             if b.stuck_n >= 2:
 
-                b.unstick = 0.5
+                b.unstick = 0.9
 
                 b.unstick_dir = random.choice((-1.0, 1.0))
 
                 b.stuck_n = 0
+
+                b.roam_t = 0.0
 
         else:
 

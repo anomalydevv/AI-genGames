@@ -12,6 +12,10 @@ _DEFAULT = {
     "character": "hex",
     "knives": ["knife"],
     "knife": "knife",
+    "gun_skins": ["none"],
+    "gun_skin": "none",
+    "knife_skins": ["none"],
+    "knife_skin": "none",
     "crosshair": 2,
 }
 
@@ -62,7 +66,7 @@ def spend(amount):
 def award_match(fs, player, player_won):
     d = data()
     mvp = max(fs, key=lambda f: (f.wins, f.kills, -f.deaths))
-    earned = 20 + int(player.kills) * 3 + (30 if player_won else 0) + (60 if mvp is player else 0)
+    earned = 20 + int(player.kills) * 3 + int(player.assists) + (30 if player_won else 0) + (60 if mvp is player else 0)
     d["souls"] = int(d.get("souls", 0)) + earned
     d["matches"] = int(d.get("matches", 0)) + 1
     if mvp is player:
