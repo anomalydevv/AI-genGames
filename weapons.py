@@ -18,11 +18,12 @@ WEAPONS = [
     Wp("Kral-47 Piyade", 31, 1, 0.10, 30, 90, 1.9, 0.85, True, 1800, 95, 2.2, 1.25, 0.92, 2.2),
     Wp("Çelik .50 Tabanca", 70, 1, 0.50, 7, 35, 1.0, 0.15, False, 2100, 100, 2.4, 5.0, 0.96, 2.0),
     Wp("M-249 Baskı Makinesi", 30, 1, 0.085, 60, 120, 2.6, 1.2, True, 2400, 100, 1.8, 0.8, 0.86, 3.2),
+    Wp("Akrep-9 SMG", 24, 1, 0.070, 32, 96, 2.2, 1.0, True, 1400, 65, 1.9, 0.9, 0.95, 2.1),
 ]
 WNAMES_TR = ["Hex-9 Tabanca", "Kasırga Revolver", "Gürz Pompalı", "VX-7 Tüfek", "Hayalet Keskin Nişancı",
-             "Kral-47 Piyade", "Çelik .50 Tabanca", "M-249 Baskı Makinesi"]
-PREF = [10, 11, 6, 14, 26, 18, 20, 16]
-SLOT_OF = [1, 1, 0, 0, 0, 0, 1, 0]
+             "Kral-47 Piyade", "Çelik .50 Tabanca", "M-249 Baskı Makinesi", "Akrep-9 SMG"]
+PREF = [10, 11, 6, 14, 26, 18, 20, 16, 15]
+SLOT_OF = [1, 1, 0, 0, 0, 0, 1, 0, 0]
 
 
 def slot_of(wi):

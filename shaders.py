@@ -45,6 +45,7 @@ uniform float vm;
 uniform float skinMode;
 uniform vec3 skinA;
 uniform vec3 skinB;
+uniform float time;
 
 out vec4 finalColor;
 
@@ -193,15 +194,85 @@ void main()
             rec = mix(rec, vec3(0.90, 0.98, 1.0), smoothstep(0.72, 1.0, lum) * 0.32);
             roughness = 0.22;
         }
-        else
+        else if (skinMode < 6.5)
         {
             float crack = abs(sin(lp.x * 19.0 + lp.z * 31.0 + fbm(lp.xy * 15.0) * 6.0));
             rec = mix(skinB, skinA, pow(1.0 - crack, 8.0) * 0.88);
             rec += vec3(0.45, 0.11, 0.02) * pow(1.0 - crack, 15.0);
             roughness = 0.48;
         }
+        else if (skinMode < 7.5)
+        {
+            float band = 0.5 + 0.5 * sin(lp.z * 18.0 + fbm(lp.xy * 6.0) * 8.0 + time * 0.8);
+            rec = mix(skinB, skinA, smoothstep(0.15, 0.92, band));
+            rec += skinA * pow(band, 10.0) * 0.45;
+            roughness = 0.36;
+        }
+        else if (skinMode < 8.5)
+        {
+            float stars = step(0.985, hash(floor(lp.xz * 190.0)));
+            float neb = fbm(lp.xy * 4.0 + vec2(time * 0.02, 0.0));
+            rec = mix(skinB, skinA, smoothstep(0.20, 0.85, neb));
+            rec += vec3(0.9, 0.85, 1.0) * stars;
+            roughness = 0.30;
+        }
+        else if (skinMode < 9.5)
+        {
+            vec2 g = lp.xy * 11.0;
+            vec2 cell = floor(g);
+            vec2 q = fract(g) - 0.5;
+            float hexEdge = 1.0 - smoothstep(0.30, 0.40, max(abs(q.x), abs(q.y)));
+            float pulse = 0.5 + 0.5 * sin(time * 2.4 + cell.x * 1.7 + cell.y * 2.3);
+            rec = mix(skinB, skinA, hexEdge * (0.5 + 0.5 * pulse));
+            rec += skinA * hexEdge * 0.28;
+            roughness = 0.30;
+        }
+        else if (skinMode < 10.5)
+        {
+            float crack = abs(sin(lp.x * 16.0 + lp.z * 27.0 + fbm(lp.yz * 11.0) * 6.5));
+            rec = mix(skinB * 0.55, skinA, pow(1.0 - crack, 10.0));
+            rec += vec3(1.0, 0.32, 0.03) * pow(1.0 - crack, 18.0) * (0.7 + 0.3 * sin(time * 3.0));
+            roughness = 0.58;
+        }
+        else if (skinMode < 11.5)
+        {
+            float shard = sin(lp.x * 24.0 + lp.z * 19.0) * cos(lp.y * 21.0 - lp.z * 11.0);
+            rec = mix(skinB, skinA, smoothstep(-0.18, 0.88, shard));
+            rec += vec3(0.92, 0.99, 1.0) * pow(max(shard, 0.0), 12.0) * 0.5;
+            roughness = 0.16;
+        }
+        else if (skinMode < 12.5)
+        {
+            float moon = sin(lp.x * 8.0 + lp.z * 6.0 + time * 0.35);
+            float crack = abs(sin(lp.x * 22.0 + lp.y * 17.0 + fbm(lp.xz * 12.0) * 5.0));
+            rec = mix(skinB, skinA, pow(1.0 - crack, 9.0) * 0.85 + smoothstep(0.5, 0.9, moon) * 0.3);
+            roughness = 0.42;
+        }
+        else if (skinMode < 13.5)
+        {
+            float wave = sin(lp.z * 26.0 + lp.x * 10.0 + time * 2.0);
+            float stripe = 1.0 - smoothstep(0.0, 0.06, abs(fract(lp.x * 14.0 + lp.z * 3.0) - 0.5));
+            rec = mix(skinB, skinA, smoothstep(0.2, 0.9, wave) * 0.7);
+            rec += skinA * stripe * 0.6;
+            roughness = 0.34;
+        }
+        else
+        {
+            rec = mix(skinB, skinA, smoothstep(0.1, 0.9, lum));
+            roughness = 0.55;
+        }
 
         base = rec;
+    }
+
+    // Void ailesi: gercekci, nabiz atan yuzey isigi (cyan/mor).
+    vec3 skinEmissive = vec3(0.0);
+    if (skinMode > 1.5 && skinMode < 2.5)
+    {
+        float fres = fresnel(N, V);
+        float pulse = 0.6 + 0.4 * sin(time * 2.2 + fragLocal.z * 9.0 + fragLocal.x * 5.0);
+        skinEmissive = skinA * (0.42 * fres + 0.10) * pulse;
+        roughness = 0.26;
     }
 
     // Directional lighting.
@@ -262,7 +333,8 @@ void main()
         base * ambient * ao +
         base * lightColor * diffuse * ao +
         lightColor * specular +
-        rimColor * rim;
+        rimColor * rim +
+        skinEmissive * 1.6;
 
     // Distance fog.
     float distanceToCamera = length(viewPos - fragPosition);

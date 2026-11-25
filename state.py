@@ -17,6 +17,7 @@ g.locked = False
 g.skip_mouse = 0
 g.back = "main"
 g.shop_tab = 0
+g.shop_scroll = 0.0
 g.quit = False
 
 # mac ayarlari
@@ -51,6 +52,18 @@ g.hitm_k = False
 g.assist_t = 0.0
 g.assist_name = ""
 g.side_t = 0.0
+
+# menu / kill hype efektleri
+g.menu_t = 0.0
+g.killfx = 0.0
+g.killfx_k = 0.0
+g.killfx_hs = False
+g.killfx_kid = "knife"
+g.killfx_wi = 0
+g.killfx_knife = False
+g.killfx_name = ""
+g.streak = 0
+g.streak_t = 0.0
 
 # mac durumu
 g.money = 0

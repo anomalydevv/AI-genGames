@@ -19,6 +19,10 @@ import random
 from bomb import SITES, in_site, site_dist, update_defuse, update_plant
 
 from combat import shoot
+try:
+    from knives import try_slash as _knife_slash
+except Exception:
+    _knife_slash = None
 
 from config import cl, wrap
 
@@ -50,11 +54,15 @@ def bot_buy(b):
 
     b.inspect = False
 
+    b.switch_cd = 0.0
+
 
 
     # Takimda zaten durbunlu (sniper) silahi olan var mi?
 
     scope_taken = 0
+
+    team_rifles = 0
 
     for o in g.FS:
 
@@ -70,6 +78,26 @@ def bot_buy(b):
 
                 break
 
+            if WEAPONS[wi].price >= 1500:
+
+                team_rifles += 1
+
+
+
+    tier = getattr(b, "diff", g.diff)
+
+    # Rol: yuksek zorlukta bazi botlar keskin nisanci, bazi botlar giris fragger'i.
+
+    role = "rifle"
+
+    if tier >= 2 and scope_taken == 0 and b.team == 1 and random.random() < 0.22:
+
+        role = "sniper"
+
+    elif tier >= 3 and random.random() < 0.18:
+
+        role = "entry"
+
 
 
     best = None
@@ -82,15 +110,27 @@ def bot_buy(b):
 
             continue
 
-        score = wd.price + random.random() * 300.0
+        score = wd.price + random.random() * 260.0
 
-        # Zirh icin para kalacaksa tercih et
+        # Zirh icin para kalacaksa tercih et.
 
         if b.money - wd.price >= 150:
 
-            score += 120.0
+            score += 140.0
 
-        # Saldiran: otomatik silah; savunan: menzilli silah
+        else:
+
+            score -= 90.0
+
+        # Rol ve taraf tercihi.
+
+        if role == "sniper" and wd.scope:
+
+            score += 600.0
+
+        if role == "entry" and wd.auto and wd.price >= 1100:
+
+            score += 260.0
 
         if b.team == 1 and wd.rng >= 90:
 
@@ -100,15 +140,37 @@ def bot_buy(b):
 
             score += 160.0
 
-        # Takimda cok sniper olmasin
+        # Pompali sadece yakin dovus icin, dusuk zorlukta.
+
+        if wd.pel > 1 and tier >= 2:
+
+            score -= 180.0
+
+        # Takimda cok sniper olmasin.
 
         if wd.scope and scope_taken >= 1:
 
-            score -= 450.0
+            score -= 520.0
+
+        # Takimda zaten cok tufek varsa ucuz secenek.
+
+        if team_rifles >= 2 and wd.price >= 2000:
+
+            score -= 220.0
 
         if best is None or score > best[0]:
 
             best = (score, i)
+
+    # Birincil silah alamiyorsak para biriktir; sadece tabanca + zirh.
+
+    if best is not None and best[1] >= 2 and b.money < 1500:
+
+        cheap = [i for i in range(1, len(WEAPONS))
+
+                 if WEAPONS[i].price <= b.money and not WEAPONS[i].scope]
+
+        best = (0.0, max(cheap, key=lambda i: WEAPONS[i].price)) if cheap else best
 
     if best is not None:
 
@@ -123,6 +185,12 @@ def bot_buy(b):
         b.mag[wi] = WEAPONS[wi].mag
 
         b.res[wi] = 999
+
+        # Tabanca da yedek olarak kalsin.
+
+        b.owned.add(0)
+
+        b.mag[0] = WEAPONS[0].mag
 
     if b.money >= 150:
 
@@ -374,30 +442,117 @@ def _teammate_defusing(b):
 
 
 
+def _weapon_score(b, wi, dist):
+
+    w = WEAPONS[wi]
+
+    pref = PREF[wi]
+
+    fit = 1.0 - min(1.0, abs(pref - dist) / max(pref, dist, 1.0))
+
+    ammo = b.mag[wi] / max(1.0, float(w.mag))
+
+    score = fit * 1.6 + w.price / 2400.0 + ammo * 0.45
+
+    if w.scope and dist < 12.0:
+
+        score -= 1.8
+
+    if w.pel > 1 and dist > 18.0:
+
+        score -= 0.9
+
+    if not w.auto and dist > 26.0:
+
+        score -= 0.35
+
+    if wi == 0:
+
+        score -= 0.3
+
+    return score
+
+
+def _switch_weapon(b, dist):
+
+    """Mesafeye ve mermi durumuna gore en iyi sahip olunan silaha gec."""
+
+    if getattr(b, "switch_cd", 0.0) > 0.0 or b.reload_t > 0 or b.glitch > 0:
+
+        return
+
+    best = b.weapon
+
+    bs = _weapon_score(b, b.weapon, dist) - 0.30  # histerezis: surekli salinma yok
+
+    for wi in getattr(b, "owned", ()):
+
+        if wi == b.weapon or b.mag[wi] <= 0:
+
+            continue
+
+        sc = _weapon_score(b, wi, dist)
+
+        if sc > bs:
+
+            bs, best = sc, wi
+
+    if best != b.weapon:
+
+        b.weapon = best
+
+        b.switch_cd = 1.0
+
+        b.burst_left = 0
+
+        b.cd = max(b.cd, 0.22)
+
+
 def _pickup(b):
 
     if not g.drops:
 
         return
 
-    cur = WEAPONS[b.weapon].price
+    ref = b.target
 
-    greed = getattr(b, "greed", 0.5)
+    dist = math.hypot(ref.x - b.x, ref.z - b.z) if ref is not None else 16.0
+
+    cur_score = _weapon_score(b, b.weapon, dist)
+
+    cur_empty = b.mag[b.weapon] <= 0
 
     best, bd = None, 2.4 ** 2
 
     for d in g.drops:
-        wd = WEAPONS[d["wi"]]
 
-        want = wd.price > cur or (wd.price >= 600 and greed > 0.55)
-
-        if not want:
-
-            continue
+        wi = d["wi"]
 
         dd = (d["x"] - b.x) ** 2 + (d["z"] - b.z) ** 2
 
-        if dd < bd:
+        if dd >= bd:
+
+            continue
+
+        drop_mag = d.get("mag", 0)
+
+        if wi == b.weapon:
+
+            # Ayni silah: sadece mermi doldurmaya yarar.
+
+            want = drop_mag > b.mag[wi] + 1
+
+        elif b.mag[wi] <= 0 and wi in b.owned:
+
+            want = False
+
+        else:
+
+            new_score = _weapon_score(b, wi, dist)
+
+            want = cur_empty and drop_mag > 0 or new_score > cur_score + 0.22
+
+        if want:
 
             bd, best = dd, d
 
@@ -407,7 +562,13 @@ def _pickup(b):
 
     wi = best["wi"]
 
-    b.weapon = wi
+    if wi == b.weapon:
+
+        b.mag[wi] = max(b.mag[wi], best.get("mag", WEAPONS[wi].mag))
+
+    else:
+
+        b.weapon = wi
 
     b.owned.add(wi)
 
@@ -420,6 +581,8 @@ def _pickup(b):
     b.reload_t = 0.0
 
     b.cd = max(b.cd, 0.25)
+
+    b.switch_cd = 0.6
 
     g.drops.remove(best)
 
@@ -464,6 +627,8 @@ def bot_update(b, dt):
         return
 
     b.cd -= dt
+
+    b.switch_cd = max(0.0, getattr(b, "switch_cd", 0.0) - dt)
 
     b.burst_pause = max(0.0, b.burst_pause - dt)
 
@@ -569,6 +734,10 @@ def bot_update(b, dt):
 
         td = math.hypot(tgt.x - b.x, tgt.z - b.z)
 
+        _switch_weapon(b, td)
+
+        w = WEAPONS[b.weapon]
+
     else:
 
         td = 1e9
@@ -607,6 +776,24 @@ def bot_update(b, dt):
 
                 action = "plant"
 
+        elif bomb and bomb.get("carrier") is not None and getattr(bomb.get("carrier"), "alive", False):
+
+            cx, cz = bomb["carrier"].x, bomb["carrier"].z
+
+            sx, sy = SITES[b.site_target]
+
+            dxc, dzc = sx - cx, sy - cz
+
+            dc = math.hypot(dxc, dzc) + 1e-6
+
+            back = getattr(b, "escort_a", None)
+
+            if back is None:
+
+                back = b.escort_a = random.random() * math.tau
+
+            aim = (cx - dxc / dc * 5.5 + math.cos(back) * 2.5, cz - dzc / dc * 5.5 + math.sin(back) * 2.5)
+
         elif bomb and bomb.get("dropped"):
 
             atk = [f for f in g.FS if f.alive and f.team == 0 and not f.player]
@@ -639,9 +826,29 @@ def bot_update(b, dt):
 
                     hold = True  # defuse eden arkadasi kolla
 
+                elif tgt is None and bd > 12.0:
+
+                    mates = [f for f in g.FS if f is not b and f.alive and f.team == 1]
+
+                    near = any((f.x - b.x) ** 2 + (f.z - b.z) ** 2 < 100.0 for f in mates)
+
+                    bt = float(bomb.get("t", 30.0)) if bomb else 30.0
+
+                    if mates and not near and bt > 8.0:
+
+                        hold = True  # daginik retake yok: arkadasi bekle
+
         else:
 
             aim = SITES[b.site_target]
+
+            if bomb and bomb.get("dropped"):
+
+                db = math.hypot(b.x - bomb["x"], b.z - bomb["z"])
+
+                if db < 10.0:
+
+                    aim = (bomb["x"], bomb["z"])
 
 
 
@@ -747,13 +954,23 @@ def bot_update(b, dt):
 
             tol = min(tol, 0.04)
 
+        if d < 2.4 and getattr(b, "slash_cd", 0.0) <= 0 and err < 0.5 and _knife_slash is not None:
+
+            try:
+
+                _knife_slash(b)
+
+            except Exception:
+
+                pass
+
         if b.mag[b.weapon] <= 0 and b.reload_t <= 0:
 
             b.reload_t = w.reload
 
         elif (b.react <= 0 and b.cd <= 0 and b.burst_pause <= 0 and b.reload_t <= 0
 
-              and b.glitch <= 0 and err < tol and d < w.rng):
+              and b.glitch <= 0 and err < tol and d < w.rng and d >= 2.2):
 
             spread = (w.ads if w.scope else w.hip * 0.6) + D["spread"]
 

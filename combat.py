@@ -82,12 +82,23 @@ def kill(v, a, wname, head):
         g.soul_t = 2.0
         g.soul_pos = (v.x, v.y + 1.0, v.z)
         g.hitm_k = True
+        g.streak += 1
+        g.streak_t = 3.2
+        g.killfx = 1.0
+        g.killfx_hs = bool(head)
+        g.killfx_kid = g.p.knife
+        g.killfx_wi = g.p.weapon
+        g.killfx_knife = g.p.knife_active
+        g.killfx_name = v.name
         g.kills_show.append({"t": 2.8, "name": v.name, "w": g.p.weapon, "knife": g.p.knife_active,
                              "kid": g.p.knife, "wname": wname, "hs": bool(head)})
         if len(g.kills_show) > 4:
             g.kills_show.pop(0)
     if v is g.p:
         g.cursor_dead = True
+        g.streak = 0
+        g.streak_t = 0.0
+        g.killfx = 0.0
 
 
 def apply_damage(v, dmg, a, head, wname):

@@ -137,6 +137,9 @@ def start_match():
         f.diff = enemy_sk[i]
         g.FS.append(f)
     g.kills_show = []
+    g.killfx = 0.0
+    g.streak = 0
+    g.streak_t = 0.0
     g.money = 1000
     g.ult = 0.0
     g.ult_t = 0.0
@@ -144,6 +147,7 @@ def start_match():
     g.x_ready = True
     g.v_cd = 0.0
     g.c_cd = 0.0
+    g.surge_t = 0.0
     g.soul_t = 0.0
     g.soul_pos = (0, 0, 0)
     g.wave_on = False
@@ -218,6 +222,7 @@ def start_round():
     g.x_ready = True
     g.v_cd = 0.0
     g.c_cd = 0.0
+    g.surge_t = 0.0
     g.ult = min(100.0, g.ult + 15)
     g.ult_t = 0.0
     g.ult_kind = ""
@@ -320,6 +325,12 @@ def _use_character_c(p, frozen):
         p.ghost = 3.0
     elif kind == "shield":
         p.armor = min(100.0, p.armor + 50.0)
+    elif kind == "overload":
+        g.surge_t = 4.0
+        for _ in range(14):
+            g.parts.append([p.x + random.uniform(-0.4, 0.4), p.y + random.uniform(0.6, 1.8),
+                            p.z + random.uniform(-0.4, 0.4), random.uniform(-1, 1),
+                            random.uniform(2, 5), random.uniform(-1, 1), 0.5, C(255, 220, 90)])
     g.c_cd = ch.c.cd
 
 
@@ -489,9 +500,12 @@ def player_update(dt):
             inspect_off(p)
             if p.mag[p.weapon] > 0:
                 spread = lerpf(w.hip, w.ads, p.ads) + sp * 0.1 + (2.0 if not p.grounded else 0) + p.heat
+                boost = 1.5 if g.ult_t > 0 else 1.0
+                if getattr(g, "surge_t", 0.0) > 0:
+                    boost *= 1.5
                 shoot(p, spread, 1.25 if g.ult_t > 0 else 1.0)
                 p.mag[p.weapon] -= 1
-                p.cd = w.rof / (1.5 if g.ult_t > 0 else 1.0)
+                p.cd = w.rof / boost
                 p.kick += w.kick
                 p.cycle = 1.0
                 p.flash = 0.05
@@ -511,13 +525,38 @@ def player_update(dt):
         _use_character_c(p, frozen)
     if is_key_pressed(KEY_V) and g.v_cd <= 0 and g.phase != "freeze":
         g.v_cd = 9.0
-        p.dash_t = 0.18
-        p.inv = 0.3
+        cid = ch.cid
         if n > 0:
             p.dash = (wx, wz)
         else:
             fl = math.hypot(sn, cs)
             p.dash = (sn / fl, cs / fl)
+        if cid == "zephyr":
+            p.dash_t = 0.26
+            p.inv = 0.2
+        elif cid == "nyx":
+            p.dash_t = 0.18
+            p.inv = 0.3
+            p.ghost = max(p.ghost, 1.2)
+        elif cid == "titan":
+            p.dash_t = 0.16
+            p.inv = 0.4
+            for o in g.FS:
+                if o is p or not o.alive or o.team == p.team:
+                    continue
+                if (o.x - p.x) ** 2 + (o.z - p.z) ** 2 < 3.2 ** 2:
+                    o.vx += p.dash[0] * 9.0
+                    o.vz += p.dash[1] * 9.0
+                    apply_damage(o, 25.0, p, False, "Omuz Darbesi")
+        elif cid == "volt":
+            p.dash_t = 0.22
+            p.inv = 0.3
+            for _ in range(16):
+                g.parts.append([p.x, p.y + 1.0, p.z, random.uniform(-2, 2),
+                                random.uniform(0, 2), random.uniform(-2, 2), 0.4, C(255, 220, 90)])
+        else:
+            p.dash_t = 0.18
+            p.inv = 0.3
     if is_key_pressed(KEY_G) and g.ult >= 100 and g.phase != "freeze":
         g.ult = 0
         g.ult_t = 6.0
@@ -525,14 +564,47 @@ def player_update(dt):
         if g.ult_kind == "ult_tank":
             p.hp = 100.0
             p.armor = max(p.armor, 75.0)
+        elif g.ult_kind == "ult_storm":
+            for o in g.FS:
+                if o is p or not o.alive or o.team == p.team:
+                    continue
+                o.glitch = 2.0
+                for _ in range(6):
+                    g.parts.append([o.x + random.uniform(-0.5, 0.5), o.y + random.uniform(0.4, 1.8),
+                                    o.z + random.uniform(-0.5, 0.5), random.uniform(-2, 2),
+                                    random.uniform(1, 4), random.uniform(-2, 2), 0.5, C(255, 220, 90)])
+
+
+def _wave_fx(p, col, n=18, spd=6.0):
+    fx, fy, fz = look(p)
+    for _ in range(n):
+        g.parts.append([p.x + fx * 1.2, p.y + p.eh, p.z + fz * 1.2,
+                        fx * spd + random.uniform(-2.5, 2.5),
+                        random.uniform(-0.5, 2.0), fz * spd + random.uniform(-2.5, 2.5),
+                        0.45, col])
 
 
 def wave_update(dt):
     if not g.wave_on:
         return
+    import characters as _ch
     p = g.p
+    cid = _ch.get(g.char).cid
+    # Karakter basina dalga profili: menzil / koni / hasar / efekt.
+    if cid == "zephyr":
+        maxr, cone, d0, d1, wname, col = 22.0, 65.0, 55.0, 25.0, "Kasirga", C(120, 230, 255)
+    elif cid == "nyx":
+        maxr, cone, d0, d1, wname, col = 40.0, 12.0, 110.0, 70.0, "Golge Ok", C(170, 120, 255)
+    elif cid == "titan":
+        maxr, cone, d0, d1, wname, col = 12.0, 180.0, 100.0, 80.0, "Sismik Yumruk", C(255, 180, 80)
+    elif cid == "volt":
+        maxr, cone, d0, d1, wname, col = 26.0, 30.0, 75.0, 45.0, "Zincir Carpma", C(255, 220, 90)
+    else:
+        maxr, cone, d0, d1, wname, col = 32.0, 40.0, 95.0, 40.0, "Hex Dalgasi", CYAN
+    if g.wave_t == 0.0:
+        _wave_fx(p, col)
     g.wave_t += dt / 0.95
-    rng = 32 * g.wave_t
+    rng = maxr * g.wave_t
     ex, ey, ez = p.x, p.y + p.eh, p.z
     fx, fy, fz = look(p)
     for o in g.FS:
@@ -543,15 +615,39 @@ def wave_update(dt):
         if d > rng or d < 0.01:
             continue
         ca = (dx * fx + dy * fy + dz * fz) / d
-        if ca < math.cos(40 * DEG):
+        if cone < 179.0 and ca < math.cos(cone * DEG):
             continue
         if not los(ex, ey, ez, o.x, o.y + 1.1, o.z):
             continue
         ang = math.acos(cl(ca, -1, 1))
-        dmg = lerpf(95, 40, min(1, d / 32)) * (1 - 0.45 * ang / (40 * DEG))
+        span = max(1.0, cone * DEG)
+        dmg = lerpf(d0, d1, min(1, d / maxr)) * (1 - 0.45 * ang / span)
         g.wave_hit.add(id(o))
-        o.glitch = 1.5
-        apply_damage(o, dmg, p, False, "Hex Dalgasi")
+        if cid == "zephyr":
+            o.vx += dx / d * 10.0
+            o.vz += dz / d * 10.0
+            o.glitch = 1.0
+        elif cid == "nyx":
+            o.glitch = 2.0
+        elif cid == "titan":
+            o.vx += dx / d * 6.0
+            o.vz += dz / d * 6.0
+            o.glitch = 1.0
+        elif cid == "volt":
+            o.glitch = 1.5
+        else:
+            o.glitch = 1.5
+        apply_damage(o, dmg, p, False, wname)
+        if cid == "volt":
+            # Zincir: ilk hedefe yakin 2 dusmana sek.
+            buddies = [b for b in g.FS if b is not o and b is not p and b.alive and b.team != p.team
+                       and (b.x - o.x) ** 2 + (b.z - o.z) ** 2 < 8.0 ** 2 and id(b) not in g.wave_hit]
+            buddies.sort(key=lambda b: (b.x - o.x) ** 2 + (b.z - o.z) ** 2)
+            for b in buddies[:2]:
+                g.wave_hit.add(id(b))
+                b.glitch = 1.5
+                apply_damage(b, 40.0, p, False, wname)
+                g.parts.append([b.x, b.y + 1.2, b.z, 0, 2, 0, 0.4, col])
     if g.wave_t >= 1:
         g.wave_on = False
 
@@ -576,9 +672,14 @@ def update_play(dt):
     g.side_t = max(0.0, g.side_t - dt)
     g.hitm = max(0, g.hitm - dt)
     g.hit_t = max(0, g.hit_t - dt)
+    g.killfx = max(0.0, g.killfx - dt * 1.9)
+    g.streak_t = max(0.0, g.streak_t - dt)
+    if g.streak_t <= 0.0:
+        g.streak = 0
     g.soul_t = max(0, g.soul_t - dt)
     g.v_cd = max(0, g.v_cd - dt)
     g.c_cd = max(0, g.c_cd - dt)
+    g.surge_t = max(0.0, getattr(g, "surge_t", 0.0) - dt)
     if g.ult_t > 0 and g.ult_kind == "ult_wind":
         g.v_cd = 0.0
     g.dig += ((1.0 if p.ghost > 0 else 0.0) - g.dig) * min(1, dt * 10)

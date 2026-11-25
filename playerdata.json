@@ -1,13 +1,23 @@
 {
-  "souls": 4233,
-  "matches": 6,
-  "mvps": 6,
-  "character": "nyx",
+  "souls": 473,
+  "matches": 7,
+  "mvps": 7,
+  "character": "volt",
   "knives": [
     "knife",
     "karambit",
     "butterfly"
   ],
-  "knife": "butterfly",
-  "crosshair": 0
+  "knife": "karambit",
+  "gun_skins": [
+    "none",
+    "crimson"
+  ],
+  "gun_skin": "none",
+  "knife_skins": [
+    "none",
+    "voidstone"
+  ],
+  "knife_skin": "voidstone",
+  "crosshair": 1
 }

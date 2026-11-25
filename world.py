@@ -12,12 +12,15 @@ A sitesi: kuzey-dogu oda              |  B sitesi: guney-bati oda
 import math
 import random
 
+import csg
+import props
 from config import C
 
 BOUND = 42.0
 SITE_R = 3.8
 
 BOX = []
+DECOR = []
 ZONES = []
 SITES = {}
 SPAWNS_ATK = []
@@ -82,21 +85,36 @@ def _segments(a, b, gaps):
     return segs
 
 
-def wall_z(boxes, z, x0, x1, gaps=(), h=5, col=None, t=1.0):
-    """Yatay duvar (z sabit, x0..x1). gaps = kapi bosluklari."""
-    for a, b in _segments(x0, x1, gaps):
-        add_box(boxes, (a + b) / 2, z, b - a, h, t, col or WALL)
+def wall_z(boxes, z, x0, x1, gaps=(), h=5, col=None, t=1.0, win=False):
+    """Yatay duvar (z sabit). Kapilar CSG ile oyulur; ustte lintel kalir."""
+    c = col or WALL
+    full = (x0, 0.0, z - t / 2, x1, h, z + t / 2, c)
+    cuts = [csg.cutter((a + b) / 2, 1.55, z, b - a, 3.1, t * 1.8) for a, b in gaps]
+    if win and x1 - x0 > 4.0:
+        cuts.append(csg.cutter((x0 + x1) / 2, 2.75, z,
+                               min(2.6, (x1 - x0) * 0.34), 0.95, t * 1.8))
+    boxes.extend(csg.subtract_all([full], cuts))
 
 
-def wall_x(boxes, x, z0, z1, gaps=(), h=5, col=None, t=1.0):
-    """Dikey duvar (x sabit, z0..z1)."""
-    for a, b in _segments(z0, z1, gaps):
-        add_box(boxes, x, (a + b) / 2, t, h, b - a, col or WALL)
+def wall_x(boxes, x, z0, z1, gaps=(), h=5, col=None, t=1.0, win=False):
+    """Dikey duvar (x sabit). Kapilar CSG ile oyulur."""
+    c = col or WALL
+    full = (x - t / 2, 0.0, z0, x + t / 2, h, z1, c)
+    cuts = [csg.cutter(x, 1.55, (a + b) / 2, t * 1.8, 3.1, b - a) for a, b in gaps]
+    if win and z1 - z0 > 4.0:
+        cuts.append(csg.cutter(x, 2.75, (z0 + z1) / 2,
+                               t * 1.8, 0.95, min(2.6, (z1 - z0) * 0.34)))
+    boxes.extend(csg.subtract_all([full], cuts))
+
+
+def _sym_rand(rnd):
+    """180 derece simetrik karar: ayni deger iki karsit hucrede kullanilir."""
+    return rnd.random(), rnd.random(), rnd.random(), rnd.choice((-1.0, 1.0))
 
 
 def _build_room_map(spec):
     rnd = random.Random(spec["seed"])
-    boxes, zones = [], []
+    boxes, zones, decor = [], [], []
     cols, rows = spec["cols"], spec["rows"]
     b = BOUND
     span = 2 * b
@@ -133,55 +151,132 @@ def _build_room_map(spec):
             elif (ix, iz) == b_cell:
                 col = spec["site_b"]
             floor(boxes, x0 + 0.06, z0 + 0.06, x1 - 0.06, z1 - 0.06, col)
-            name = {(0, 0): "Savunan Spawn", (cols - 1, rows - 1): "Saldiran Spawn",
-                    (cols - 1, 0): "A Sitesi", (0, rows - 1): "B Sitesi"}.get((ix, iz))
-            zones.append((name or "Oda %d-%d" % (ix + 1, iz + 1), x0, z0, x1, z1))
+            fixed = {(0, 0): "Savunan Spawn", (cols - 1, rows - 1): "Saldiran Spawn",
+                     (cols - 1, 0): "A Sitesi", (0, rows - 1): "B Sitesi"}.get((ix, iz))
+            if fixed is None:
+                # Tutarli callout: merkeze gore adlandir, Oda X-Y yok.
+                cxm = (ix - (cols - 1) / 2.0) / max(1.0, (cols - 1) / 2.0)
+                czm = (iz - (rows - 1) / 2.0) / max(1.0, (rows - 1) / 2.0)
+                if abs(cxm) < 0.6 and abs(czm) < 0.6:
+                    fixed = "Orta"
+                elif czm < -0.5:
+                    fixed = "Kuzey Koridor" if abs(cxm) < 0.9 else ("A Baglanti" if cxm > 0 else "Savunma Baglanti")
+                elif czm > 0.5:
+                    fixed = "Guney Koridor" if abs(cxm) < 0.9 else ("Saldiri Baglanti" if cxm > 0 else "B Baglanti")
+                else:
+                    fixed = "Orta Kanat %s" % ("Dogu" if cxm > 0 else "Bati")
+            zones.append((fixed, x0, z0, x1, z1))
 
+    # --- Simetrik duvarlar: 180 derece donus esligi. A/B adaleti icin kritik.
+    def _mirror_x(ix):
+        return cols - ix
+    def _mirror_z(iz):
+        return (rows - 1 - iz)
+    done_v, done_h = set(), set()
     for ix in range(1, cols):
         x = -b + ix * cw
+        mx = -b + _mirror_x(ix) * cw
         for iz in range(rows):
-            z0, z1 = -b + iz * ch, -b + (iz + 1) * ch
-            if rnd.random() < 0.22:
+            miz = _mirror_z(iz)
+            if (ix, iz) in done_v or (mx, miz) in done_v:
                 continue
-            zc = (z0 + z1) / 2
-            dw = min(6.4, ch * 0.42)
-            col = spec["wall"] if rnd.random() < 0.5 else spec["wall2"]
-            wall_x(boxes, x, z0, z1, [(zc - dw / 2, zc + dw / 2)], col=col)
+            # Orta serit her zaman acik: ana gecis garantisi.
+            mid_row = (iz == rows // 2 or miz == rows // 2)
+            skip_r, col_r, win_r, _s = _sym_rand(rnd)
+            skip = skip_r < 0.22 and not mid_row
+            if ix == cols // 2 and mid_row:
+                skip = False
+            col = spec["wall"] if col_r < 0.5 else spec["wall2"]
+            for _ix, _x, _iz in ((ix, x, iz), (_mirror_x(ix), mx, miz)):
+                if skip:
+                    continue
+                _z0, _z1 = -b + _iz * ch, -b + (_iz + 1) * ch
+                _zc = (_z0 + _z1) / 2
+                _dw = min(6.4, ch * 0.42)
+                wall_x(boxes, _x, _z0, _z1, [(_zc - _dw / 2, _zc + _dw / 2)], col=col,
+                       win=win_r < 0.30)
+            done_v.add((ix, iz))
+            done_v.add((_mirror_x(ix), miz))
     for iz in range(1, rows):
         z = -b + iz * ch
+        mz = -b + (rows - iz) * ch
         for ix in range(cols):
-            x0, x1 = -b + ix * cw, -b + (ix + 1) * cw
-            if rnd.random() < 0.22:
+            mix = cols - 1 - ix
+            if (ix, iz) in done_h or (mix, rows - iz) in done_h:
                 continue
-            xc = (x0 + x1) / 2
-            dw = min(6.4, cw * 0.42)
-            col = spec["wall"] if rnd.random() < 0.5 else spec["wall2"]
-            wall_z(boxes, z, x0, x1, [(xc - dw / 2, xc + dw / 2)], col=col)
+            mid_col = (ix == cols // 2 or mix == cols // 2)
+            skip_r, col_r, win_r, _s = _sym_rand(rnd)
+            skip = skip_r < 0.22 and not (mid_col and iz == rows // 2)
+            col = spec["wall"] if col_r < 0.5 else spec["wall2"]
+            for _ix, _z in ((ix, z), (mix, mz)):
+                if skip:
+                    continue
+                _x0, _x1 = -b + _ix * cw, -b + (_ix + 1) * cw
+                _xc = (_x0 + _x1) / 2
+                _dw = min(6.4, cw * 0.42)
+                wall_z(boxes, _z, _x0, _x1, [(_xc - _dw / 2, _xc + _dw / 2)], col=col,
+                       win=win_r < 0.30)
+            done_h.add((ix, iz))
+            done_h.add((mix, rows - iz))
 
+    # --- Simetrik cover: karsit hucre ayni duzende, sadece 180 cevir.
     for iz in range(rows):
         for ix in range(cols):
             if (ix, iz) in reserved:
                 continue
+            miz, mix = _mirror_z(iz), cols - 1 - ix
+            if mix < ix or (mix == ix and miz <= iz):
+                pass
+            if (mix, miz) in reserved:
+                continue
+            # Her cift icin tek karar ver.
+            if (ix, iz) > (mix, miz):
+                continue
             cx, cz = center(ix, iz)
-            for _ in range(rnd.randint(1, 3)):
-                ox = rnd.choice((-1.0, 1.0)) * cw * 0.27
-                oz = rnd.choice((-1.0, 1.0)) * ch * 0.27
-                size = 1.2 + rnd.random() * 1.1
-                add_box(boxes, cx + ox, cz + oz, size, 0.8 + rnd.random() * 0.5, size,
-                        rnd.choice((spec["cover1"], spec["cover2"], spec["plant"])))
-            if rnd.random() < 0.3:
-                add_box(boxes, cx + rnd.choice((-1.0, 1.0)) * cw * 0.18, cz,
-                        1.0, 4.8, 1.0, DARK)
+            mcx, mcz = center(mix, miz)
+            kind = rnd.random()
+            sx = rnd.choice((-1.0, 1.0)) * cw * 0.26
+            sz = rnd.choice((-1.0, 1.0)) * ch * 0.26
+            for _cx, _cz, _sx, _sz in ((cx, cz, sx, sz), (mcx, mcz, -sx, -sz)):
+                if kind < 0.30:
+                    s = 1.1 + rnd.random() * 0.35
+                    props.crate(boxes, decor, _cx + _sx, _cz + _sz, s, spec["cover1"], rnd)
+                elif kind < 0.55:
+                    props.barrel(boxes, decor, _cx + _sx, _cz + _sz, spec["cover2"], rnd)
+                    props.barrel(boxes, decor, _cx + _sx * 0.45, _cz + _sz * 1.2,
+                                 spec["cover1"], rnd)
+                elif kind < 0.74:
+                    props.sandbags(boxes, decor, _cx + _sx, _cz + _sz, spec["plant"], rnd)
+                else:
+                    props.pillar(boxes, decor, _cx + _sx, _cz + _sz, spec["wall2"])
+            if rnd.random() < 0.55:
+                props.light(decor, cx, cz, spec["accent"])
+                props.light(decor, mcx, mcz, spec["accent"])
 
     for cell in (dfn_cell, atk_cell):
         cx, cz = center(*cell)
-        add_box(boxes, cx + cw * 0.34, cz + ch * 0.34, 1.5, 1.0, 1.5, spec["cover2"])
-        add_box(boxes, cx - cw * 0.34, cz - ch * 0.34, 1.5, 1.0, 1.5, spec["cover1"])
+        accent = spec["dfn"] if cell == dfn_cell else spec["atk"]
+        props.terminal(decor, cx, cz, 0.0, spec["wall2"], accent)
+        props.crate(boxes, decor, cx + cw * 0.34, cz + ch * 0.34, 1.5,
+                    spec["cover2"], rnd)
+        props.crate(boxes, decor, cx - cw * 0.34, cz - ch * 0.34, 1.5,
+                    spec["cover1"], rnd)
+        props.light(decor, cx, cz, accent)
+        props.sign(decor, cx, cz - ch * 0.42, 0.0, spec["wall"], accent)
     for cell in (a_cell, b_cell):
         cx, cz = center(*cell)
-        add_box(boxes, cx + cw * 0.32, cz - ch * 0.32, 1.8, 1.1, 1.8, spec["cover1"])
-        add_box(boxes, cx - cw * 0.30, cz + ch * 0.30, 1.5, 0.9, 1.5, spec["plant"])
-        add_box(boxes, cx + cw * 0.30, cz + ch * 0.30, 1.2, 4.8, 1.2, spec["wall2"])
+        site = spec["site_a"] if cell == a_cell else spec["site_b"]
+        props.terminal(decor, cx + cw * 0.30, cz - ch * 0.30, math.pi,
+                       spec["wall2"], site)
+        props.crate(boxes, decor, cx + cw * 0.32, cz - ch * 0.32, 1.8,
+                    spec["cover1"], rnd)
+        props.sandbags(boxes, decor, cx - cw * 0.30, cz + ch * 0.30,
+                       spec["plant"], rnd)
+        props.pillar(boxes, decor, cx + cw * 0.30, cz + ch * 0.30, spec["wall2"])
+        props.crate(boxes, decor, cx - cw * 0.30, cz - ch * 0.34, 1.2,
+                    spec["cover2"], rnd)
+        props.light(decor, cx, cz, site)
+        props.sign(decor, cx - cw * 0.34, cz, 0.0, spec["wall"], site)
 
     def spawn_pts(cell):
         cx, cz = center(*cell)
@@ -193,7 +288,44 @@ def _build_room_map(spec):
     dfn = spawn_pts(dfn_cell)
     sites = {"A": center(*a_cell), "B": center(*b_cell)}
     wps, adj = _waypoints(boxes)
-    return dict(boxes=boxes, zones=zones, sites=sites, atk=atk, dfn=dfn, wps=wps, adj=adj)
+    # Baglanti dogrulama: izole waypoint adalarini buda, spawn/site yakininda nokta garanti et.
+    if wps and adj:
+        seen, stack = set(), [len(wps) // 2]
+        seen.add(stack[0])
+        while stack:
+            c = stack.pop()
+            for n in adj[c]:
+                if n not in seen:
+                    seen.add(n)
+                    stack.append(n)
+        if len(seen) < len(wps) * 0.6:
+            keep = sorted(seen)
+            remap = {old: new for new, old in enumerate(keep)}
+            wps = [wps[i] for i in keep]
+            adj = [[remap[n] for n in adj[i] if n in remap] for i in keep]
+        for px, pz in atk + dfn + [sites["A"], sites["B"]]:
+            bd = min((x - px) ** 2 + (z - pz) ** 2 for x, z in wps)
+            if bd > 16.0 and not _in_boxes(px, pz, 0.4, boxes):
+                wps.append((px, pz))
+                adj.append([])
+                ni = len(wps) - 1
+                bi = nearest_wp_raw(wps, adj, px, pz, ni)
+                if bi is not None and bi != ni:
+                    adj[ni].append(bi)
+                    adj[bi].append(ni)
+    return dict(boxes=boxes, decor=decor, zones=zones, sites=sites,
+                atk=atk, dfn=dfn, wps=wps, adj=adj)
+
+
+def nearest_wp_raw(wps, adj, x, z, skip=-1):
+    bi, bd = None, 1e9
+    for i, p in enumerate(wps):
+        if i == skip:
+            continue
+        d = (p[0] - x) ** 2 + (p[1] - z) ** 2
+        if d < bd:
+            bd, bi = d, i
+    return bi
 
 
 def _in_boxes(x, z, m, boxes):
@@ -260,6 +392,7 @@ def select_map(index):
     THEME["accent"] = spec["accent"]
     THEME["accent2"] = spec["accent2"]
     BOX[:] = data["boxes"]
+    DECOR[:] = data.get("decor", [])
     ZONES[:] = data["zones"]
     SITES.clear()
     SITES.update(data["sites"])

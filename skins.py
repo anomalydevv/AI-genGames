@@ -43,19 +43,40 @@ GUN_SKINS = [
     Skin("glacier", "Buz Kristali", 1400,
          "Buz mavisi kristal yuzey, keskin beyaz kirilmalar.",
          C(155, 225, 255)),
+    Skin("aurora", "Kutup Isigi", 2200,
+         "Yesil-cyan dalgalar halinde akan kutup isigi kaplamasi.",
+         C(90, 255, 190)),
+    Skin("galaxy", "Galaksi", 2600,
+         "Yildiz tozu ve mor nebula bulutlari; derin uzay gorunumu.",
+         C(190, 130, 255)),
+    Skin("hextech", "Hex Orgu", 3000,
+         "Altin hexagon hucreleri ve turkuaz enerji cekirdegi.",
+         C(120, 230, 220)),
+    Skin("obsidian", "Obsidyen Atesi", 2000,
+         "Siyah volkanik cam uzerinde akan turuncu magma catlaklari.",
+         C(255, 120, 40)),
 ]
 
 KNIFE_SKINS = [
     Skin("none", "Fabrika", 0, "Bicagin orijinal celik ve sap gorunumu.",
          C(180, 190, 205)),
     Skin("voidstone", "Void Tasi", 2800,
-         "Mor-cyan firtina tasi. Karambitte donen void parcaciklari ve neon iz.",
-         C(165, 85, 255), note="KARAMBIT EFEKTI"),
+         "Mor-cyan firtina tasi. Bicak tasta parcalanip mor sis icinde suzulur; gercek isik ve parcacik firtinasi.",
+         C(165, 85, 255), best=True, note="PARCALANMA EFEKTI"),
     Skin("ember", "Kor Kelebek", 1900,
          "Altin kor cizgiler; kelebek bicakta alev parcaciklari.",
          C(255, 145, 55)),
     Skin("tigerknife", "Kaplan Pencesi", 2400,
-         "Altin kaplan cizgili bicak kabugu.", C(255, 185, 60), best=True),
+         "Altin kaplan cizgili bicak kabugu.", C(255, 185, 60)),
+    Skin("frostbite", "Ayaz Dis", 2000,
+         "Buz kristali disler; bicak incelemesinde kar tozu savrulur.",
+         C(170, 230, 255)),
+    Skin("bloodmoon", "Kan Ayi", 2300,
+         "Kan kirmizisi hilal deseni ve koyu mor golgeler.",
+         C(255, 70, 90)),
+    Skin("cyberwave", "Siber Dalga", 2100,
+         "Magenta-cyan dalga cizgileri, retro-futuristik neon.",
+         C(255, 90, 210)),
 ]
 
 _GUN = {s.sid: s for s in GUN_SKINS}
@@ -71,6 +92,13 @@ _MODE = {
     "crimson": 4,
     "glacier": 5,
     "ember": 6,
+    "aurora": 7,
+    "galaxy": 8,
+    "hextech": 9,
+    "obsidian": 10,
+    "frostbite": 11,
+    "bloodmoon": 12,
+    "cyberwave": 13,
 }
 
 _ACCENT = {
@@ -83,6 +111,13 @@ _ACCENT = {
     "crimson": C(255, 75, 60),
     "glacier": C(155, 225, 255),
     "ember": C(255, 145, 55),
+    "aurora": C(90, 255, 180),
+    "galaxy": C(190, 130, 255),
+    "hextech": C(120, 235, 210),
+    "obsidian": C(255, 120, 40),
+    "frostbite": C(175, 235, 255),
+    "bloodmoon": C(255, 70, 95),
+    "cyberwave": C(255, 90, 215),
 }
 
 _DARK = {
@@ -94,6 +129,13 @@ _DARK = {
     "crimson": C(24, 5, 8),
     "glacier": C(8, 22, 38),
     "ember": C(28, 9, 8),
+    "aurora": C(4, 18, 20),
+    "galaxy": C(8, 5, 20),
+    "hextech": C(7, 20, 22),
+    "obsidian": C(10, 6, 4),
+    "frostbite": C(9, 20, 30),
+    "bloodmoon": C(20, 4, 12),
+    "cyberwave": C(16, 4, 22),
 }
 
 _MID = {
@@ -105,6 +147,13 @@ _MID = {
     "crimson": C(82, 15, 20),
     "glacier": C(45, 92, 132),
     "ember": C(100, 30, 16),
+    "aurora": C(18, 78, 74),
+    "galaxy": C(46, 26, 96),
+    "hextech": C(26, 78, 74),
+    "obsidian": C(64, 22, 10),
+    "frostbite": C(38, 84, 120),
+    "bloodmoon": C(72, 10, 30),
+    "cyberwave": C(70, 16, 74),
 }
 
 _PALETTE = {
@@ -116,6 +165,13 @@ _PALETTE = {
     "crimson": (C(16, 3, 5), C(67, 9, 13), C(143, 22, 27), C(242, 64, 48), C(255, 205, 160)),
     "glacier": (C(7, 17, 31), C(25, 60, 92), C(68, 134, 175), C(165, 223, 250), C(245, 255, 255)),
     "ember": (C(22, 5, 4), C(78, 18, 10), C(168, 54, 16), C(255, 132, 34), C(255, 238, 170)),
+    "aurora": (C(3, 14, 16), C(10, 56, 58), C(24, 132, 118), C(78, 236, 180), C(210, 255, 236)),
+    "galaxy": (C(6, 4, 16), C(26, 14, 58), C(74, 40, 140), C(170, 110, 240), C(238, 220, 255)),
+    "hextech": (C(5, 14, 16), C(14, 56, 58), C(34, 128, 122), C(96, 228, 208), C(236, 255, 246)),
+    "obsidian": (C(6, 4, 3), C(38, 14, 6), C(96, 34, 10), C(232, 92, 24), C(255, 210, 130)),
+    "frostbite": (C(6, 16, 26), C(22, 58, 88), C(58, 128, 172), C(158, 224, 250), C(248, 255, 255)),
+    "bloodmoon": (C(14, 3, 10), C(58, 8, 26), C(128, 18, 48), C(236, 58, 92), C(255, 196, 210)),
+    "cyberwave": (C(12, 3, 18), C(52, 10, 64), C(128, 26, 130), C(236, 74, 202), C(190, 255, 250)),
 }
 
 
@@ -148,40 +204,50 @@ def shader_palette(sid):
 
 
 def muzzle_color(sid):
-    if sid in ("void", "voidstone", "neon", "glacier"):
+    if sid in ("void", "voidstone", "neon", "glacier", "aurora", "hextech", "frostbite", "cyberwave"):
         return C(70, 220, 255)
-    if sid in ("tiger", "tigerknife", "ember"):
+    if sid in ("tiger", "tigerknife", "ember", "obsidian"):
         return C(255, 178, 55)
-    if sid == "crimson":
+    if sid in ("crimson", "bloodmoon"):
         return C(255, 85, 55)
+    if sid == "galaxy":
+        return C(200, 130, 255)
     return C(255, 190, 80)
 
 
 def tracer_color(sid):
-    if sid in ("void", "voidstone"):
+    if sid in ("void", "voidstone", "frostbite"):
         return C(45, 180, 255, 220)
-    if sid == "neon":
+    if sid in ("neon", "hextech", "aurora"):
         return C(65, 255, 225, 220)
-    if sid in ("tiger", "tigerknife", "ember"):
+    if sid in ("tiger", "tigerknife", "ember", "obsidian"):
         return C(255, 190, 70, 220)
-    if sid == "crimson":
+    if sid in ("crimson", "bloodmoon"):
         return C(255, 80, 55, 220)
     if sid == "glacier":
         return C(165, 225, 255, 220)
+    if sid == "galaxy":
+        return C(190, 130, 255, 220)
+    if sid == "cyberwave":
+        return C(255, 90, 210, 220)
     return None
 
 
 def hit_spark(sid):
-    if sid in ("void", "voidstone"):
+    if sid in ("void", "voidstone", "frostbite"):
         return C(60, 190, 255)
-    if sid == "neon":
+    if sid in ("neon", "hextech", "aurora"):
         return C(70, 255, 225)
-    if sid in ("tiger", "tigerknife", "ember"):
+    if sid in ("tiger", "tigerknife", "ember", "obsidian"):
         return C(255, 190, 70)
-    if sid == "crimson":
+    if sid in ("crimson", "bloodmoon"):
         return C(255, 80, 55)
     if sid == "glacier":
         return C(175, 230, 255)
+    if sid == "galaxy":
+        return C(190, 140, 255)
+    if sid == "cyberwave":
+        return C(255, 90, 210)
     return C(200, 20, 30)
 
 
@@ -297,6 +363,73 @@ def _pixel_color(sid, u, v):
         if crack < 0.22:
             return pal[3]
         return pal[0] if (int(u * 53) + int(v * 31)) % 4 else pal[1]
+    if sid == "aurora":
+        w = math.sin(u * 12.0 + math.sin(v * 9.0) * 2.2 + v * 5.0)
+        band = 0.5 + 0.5 * math.sin(v * 16.0 + w * 3.4)
+        if band > 0.80:
+            return pal[4]
+        if band > 0.58:
+            return pal[3]
+        if band > 0.34:
+            return pal[2]
+        if band > 0.16:
+            return pal[1]
+        return pal[0]
+    if sid == "galaxy":
+        star = math.sin(u * 211.0) * math.cos(v * 173.0)
+        neb = 0.5 + 0.5 * math.sin(u * 8.0 + math.sin(v * 10.0) * 3.0)
+        if star > 0.94:
+            return pal[4]
+        if neb > 0.74:
+            return pal[3]
+        if neb > 0.46:
+            return pal[2]
+        return pal[1] if neb > 0.25 else pal[0]
+    if sid == "hextech":
+        hx = abs(((u * 11.0) % 1.0) - 0.5)
+        hy = abs(((v * 17.0 + (int(u * 11.0) % 2) * 0.5) % 1.0) - 0.5)
+        edge = min(hx, hy)
+        if edge > 0.42:
+            return pal[4]
+        if edge > 0.34:
+            return pal[3]
+        return pal[1] if edge > 0.18 else pal[0]
+    if sid == "obsidian":
+        crack = abs(math.sin(u * 15.0 + math.sin(v * 18.0) * 3.4 + v * 7.0))
+        if crack < 0.07:
+            return pal[4]
+        if crack < 0.16:
+            return pal[3]
+        if crack < 0.26:
+            return pal[2]
+        return pal[0]
+    if sid == "frostbite":
+        shard = math.sin(u * 19.0 + v * 27.0) * math.cos(v * 13.0 - u * 9.0)
+        if shard > 0.74:
+            return pal[4]
+        if shard > 0.34:
+            return pal[3]
+        if shard < -0.52:
+            return pal[1]
+        return pal[2]
+    if sid == "bloodmoon":
+        moon = math.sin(u * 9.0 + v * 6.0)
+        crack = abs(math.sin(u * 21.0 + math.sin(v * 16.0) * 2.6))
+        if crack < 0.08:
+            return pal[4]
+        if moon > 0.66:
+            return pal[3]
+        return pal[2] if moon > 0.10 else pal[1]
+    if sid == "cyberwave":
+        wave = math.sin(v * 22.0 + u * 9.0 + math.sin(u * 13.0) * 2.0)
+        stripe = abs(((u * 16.0 + v * 3.0) % 1.0) - 0.5)
+        if stripe < 0.05:
+            return pal[4]
+        if wave > 0.62:
+            return pal[3]
+        if wave > 0.18:
+            return pal[2]
+        return pal[0]
     return pal[2]
 
 

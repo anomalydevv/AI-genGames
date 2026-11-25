@@ -7,10 +7,11 @@ from pyray import *
 import bomb
 import characters
 import icons
+import killfx
 import knives
 import playerdata
 import skins
-from config import C, CYAN, GOLD, RED, SH, SW, cfg, lerpf
+from config import C, CYAN, GOLD, RED, SH, SW, cfg, cl, lerpf
 from match import nearest_drop, start_match
 from modes import MODES
 from state import g
@@ -197,7 +198,8 @@ def hud():
         if g.spec is not None:
             ctxt("IZLENIYOR: %s" % g.spec.name, SW / 2, 258, 24, CYAN)
         ctxt("SOL TIK / SCROLL / OK: takim arkadasi", SW / 2, 286, 16, GRAY)
-    kill_banners()
+    killfx.draw_kill_feed()
+    killfx.draw_kill_effect()
     if g.assist_t > 0 and p.alive:
         ctxt("ASIST +1   %s" % g.assist_name, SW / 2, 310, 26, CYAN)
     d = nearest_drop(p, 2.0) if p.alive and g.phase != "freeze" else None
@@ -211,27 +213,6 @@ def hud():
              SW / 2, 340, 26, THEME["accent"])
     if cfg["fps"]:
         txt("%d FPS" % get_fps(), 10, 10, 18, C(255, 255, 255, 150))
-
-
-def kill_banners():
-    w, h = 400, 52
-    base = SH - 210
-    for j, e in enumerate(reversed(g.kills_show)):
-        a = min(1.0, e["t"] / 0.35)
-        ai = int(255 * a)
-        x = SW / 2 - w / 2
-        y = base - j * (h + 6)
-        R(x, y, w, h, C(8, 12, 18, int(215 * a)))
-        R(x, y, 4, h, C(255, 50, 70, ai))
-        if e["knife"]:
-            icons.draw_knife(e["kid"], x + 12, y + 8, 92, 36, ai)
-        else:
-            icons.draw_weapon(e["w"], x + 12, y + 8, 92, 36, ai)
-        txt("OLDURDUN", x + 116, y + 6, 13, C(255, 90, 100, ai))
-        txt(e["name"][:20], x + 116, y + 20, 22, C(255, 255, 255, ai))
-        if e["hs"]:
-            txt("KAFA", x + w - 54, y + 6, 13, C(255, 205, 70, ai))
-        rtxt(e["wname"][:24], x + w - 14, y + 30, 13, C(190, 196, 210, ai))
 
 
 def scoreboard():
@@ -364,29 +345,31 @@ def screen_main():
 def screen_char():
     title("KARAKTER SECIMI", "Secili karakterle maca cik")
     d = playerdata.data()
+    n = len(characters.CHARACTERS)
+    cw = (SW - 40) / n
     for i, ch in enumerate(characters.CHARACTERS):
-        x = 35 + i * 302
+        x = 20 + i * cw
         y = 150
         sel = g.char == i
-        panel(x, y, 290, 380)
+        panel(x, y, cw - 12, 380)
         if sel:
-            RL(x + 4, y + 4, 282, 372, ch.color, 3)
-        txt(ch.name, x + 18, y + 14, 30, ch.color)
-        txt(ch.title, x + 18, y + 52, 16, GOLD)
-        R(x + 18, y + 82, 254, 1, C(70, 80, 95))
+            RL(x + 4, y + 4, cw - 20, 372, ch.color, 3)
+        txt(ch.name, x + 18, y + 14, 28, ch.color)
+        txt(ch.title, x + 18, y + 52, 14, GOLD)
+        R(x + 18, y + 82, cw - 48, 1, C(70, 80, 95))
         skills = [ch.x, ch.c, ch.v, ch.g]
         for j, sk in enumerate(skills):
             yy = y + 102 + j * 54
             R(x + 18, yy, 38, 40, C(10, 15, 22, 230))
             RL(x + 18, yy, 38, 40, ch.color if sel else C(70, 80, 95), 2)
             ctxt(sk.key, x + 37, yy + 6, 22, WHITE)
-            txt(sk.name, x + 68, yy + 4, 16, WHITE)
+            txt(sk.name[:18], x + 68, yy + 4, 14, WHITE)
             if sk.cd > 0:
                 txt("CD %.0fs" % sk.cd, x + 68, yy + 24, 12, GRAY)
         if sel:
-            button(x + 75, y + 322, 140, 40, "SECILI", 18, active=True, enabled=False)
+            button(x + 30, y + 322, 130, 40, "SECILI", 18, active=True, enabled=False)
         else:
-            if button(x + 75, y + 322, 140, 40, "SEC", 18):
+            if button(x + 30, y + 322, 130, 40, "SEC", 18):
                 g.char = i
                 d["character"] = ch.cid
                 playerdata.save()
@@ -506,13 +489,27 @@ def screen_shop():
     x0 = SW / 2 - (len(tabs) * tw_ + 10 * (len(tabs) - 1)) / 2
     for i, (lab, idx) in enumerate(tabs):
         if button(x0 + i * (tw_ + 10), 138, tw_, 38, lab, 16, active=(g.shop_tab == idx)):
+            if g.shop_tab != idx:
+                g.shop_scroll = 0.0
             g.shop_tab = idx
     if g.shop_tab == 0:
         _shop_knives(d)
-    elif g.shop_tab == 1:
-        _shop_skin_grid(d, "gun")
     else:
-        _shop_skin_grid(d, "knife")
+        kind = "gun" if g.shop_tab == 1 else "knife"
+        cols, chh, gy, cw, gx, x0, rows, step, max_row, vis = _grid_metrics(kind)
+        wheel = get_mouse_wheel_move()
+        if wheel != 0 and mouse_in(0, 182, SW, SH - 278):
+            g.shop_scroll = cl(g.shop_scroll + (-1 if wheel > 0 else 1), 0, max_row)
+        g.shop_scroll = cl(g.shop_scroll, 0, max_row)
+        _shop_skin_grid(d, kind, g.shop_scroll * step)
+        if max_row > 0:
+            track_y, track_h = 184, SH - 278
+            R(SW - 18, track_y, 4, track_h, C(30, 38, 46, 180))
+            frac = min(1.0, vis / float(rows))
+            th = max(28, track_h * frac)
+            ty = track_y + (track_h - th) * (g.shop_scroll / float(max_row))
+            R(SW - 19, ty, 6, th, C(0, 230, 200, 220))
+            txt("SCROLL", SW - 74, 162, 11, C(100, 140, 150))
     if button(SW / 2 - 130, 650, 260, 48, "Geri", 24):
         g.state = "main"
 
@@ -602,15 +599,30 @@ def _skin_card(s, kind, d, x, y, w, h):
                 _equip_skin(d, kind, s.sid)
 
 
-def _shop_skin_grid(d, kind):
-    items = skins.GUN_SKINS if kind == "gun" else skins.KNIFE_SKINS
+def _grid_metrics(kind):
     if kind == "gun":
-        x0, y0, cw, ch, gx, gy, cols = 38, 184, 392, 202, 18, 14, 3
+        cols, ch, gy, cw, gx, x0 = 3, 202, 14, 392, 18, 38
     else:
-        x0, y0, cw, ch, gx, gy, cols = 60, 190, 552, 200, 16, 16, 2
+        cols, ch, gy, cw, gx, x0 = 2, 200, 16, 552, 16, 60
+    items = skins.GUN_SKINS if kind == "gun" else skins.KNIFE_SKINS
+    rows = (len(items) + cols - 1) // cols
+    step = ch + gy
+    view = SH - 278
+    vis = max(1, int(view // step))
+    max_row = max(0, rows - vis)
+    return cols, ch, gy, cw, gx, x0, rows, step, max_row, vis
+
+
+def _shop_skin_grid(d, kind, scroll=0.0):
+    items = skins.GUN_SKINS if kind == "gun" else skins.KNIFE_SKINS
+    cols, ch, gy, cw, gx, x0 = _grid_metrics(kind)[:6]
+    y0 = 184 - scroll
+    top, bottom = 182, SH - 94
     for i, s in enumerate(items):
         x = x0 + (i % cols) * (cw + gx)
         y = y0 + (i // cols) * (ch + gy)
+        if y + ch < top + 2 or y > bottom - 2:
+            continue
         _skin_card(s, kind, d, x, y, cw, ch)
 
 

@@ -27,6 +27,7 @@ class F:
         s.cd = s.reload_t = 0.0
         s.ghost = s.inv = s.glitch = 0.0
         s.death_t = 0.0
+        s.rag_seed = random.random()
         s.grounded = True
         s.landed = 0.0
         s.walk = 0.0
@@ -92,6 +93,7 @@ class F:
         s.cd = s.reload_t = 0.0
         s.ghost = s.inv = s.glitch = 0.0
         s.death_t = 0.0
+        s.rag_seed = random.random()
         s.target = None
         s.path = []
         s.lost_t = 0.0

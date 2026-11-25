@@ -346,13 +346,37 @@ STARS = [(random.uniform(-math.pi, math.pi), random.uniform(0.05, 1.2), random.r
 PAGE_TEXTS = [
     ["Araba neden durdu sanıyorsun?", "Orman seni buraya çağırdı."],
     ["Bu kağıtları ben astım.", "Onu görme. Sakın bakma."],
-    ["Arkana bakma."],
-    ["Yardım arayan herkesi", "önce o buldu."],
+    ["Arkana bakma.", "Saymaya başladı bile."],
+    ["Yardım arayan herkesi", "önce o buldu.", "Telsiz direğindeki isimlere bak."],
     ["O sessizken yaklaşır.", "Bakarsan durur. Bakmazsan yürür."],
-    ["Fener onu uzak tutmaz."],
-    ["O her ağacın arkasında."],
-    ["SON SAYFA", "Hazır mısın? O hazır."],
+    ["Fener onu uzak tutmaz.", "Ateş onu yavaşlatır. Kampı hatırla."],
+    ["O her ağacın arkasında.", "Piller bitmeden bitir."],
+    ["SON SAYFA", "Hazır mısın? O hazır.", "Kaçma. Yüzleş."],
 ]
+CABIN_NOTE = [
+    "Bekçi kulübesi günlüğü:",
+    "3. gece: Ağaçlar yer değiştirmiş gibi.",
+    "5. gece: Telsizde sadece nefes var.",
+    "7. gece: O, kapının önünde durdu.",
+    "Eğer bunu okuyorsan kamp ateşini yak.",
+]
+CAR_NOTE = [
+    "Bagajda eski bir fener pili.",
+    "Torpidoda not: 'Kağıtları topla,",
+    "ateşten ayrılma, ona bakma.'",
+]
+OBJECTIVES = [
+    "Ormana gir. Kağıtları bul.",
+    "Bir kağıt. Yedi kaldı. Derinleş.",
+    "İki kağıt. O seni fark etti.",
+    "Üç kağıt. Artık daha hızlı.",
+    "Dört kağıt. Yarısı bitti. Ateşe dön.",
+    "Beş kağıt. Fener titriyor.",
+    "Altı kağıt. Neredeyse her yerde.",
+    "Yedi kağıt. SON BİR. Koş.",
+    "Sekiz kağıt. YÜZLEŞ.",
+]
+EXTRA_BLOCK = []  # kulube + kamp atesi carpisma daireleri (x, z, r)
 INTRO_SUBS = [
     (0.6, 4.0, "Gün batımı... bu orman yolu hiç bitmiyor."),
     (4.2, 7.0, "Telefon çekmiyor. Haritada da yol görünmüyor."),
@@ -399,6 +423,7 @@ def collide(x, z):
             for t in GRID.get((kx + i, kz + j), ()):
                 lst.append((t[0], t[1], t[3] + 0.5))
     lst.extend((bx, bz, br + 0.5) for bx, bz, br in BLOCK)
+    lst.extend((bx, bz, br) for bx, bz, br in EXTRA_BLOCK)
     for bx, bz, m in lst:
         dx, dz = x - bx, z - bz
         d2 = dx * dx + dz * dz
@@ -499,31 +524,73 @@ def draw_page(p):
     rl.rl_pop_matrix()
 
 
+BATT_C = Color(60, 230, 120, 200)   # emissive pil
+WOOD_C = Color(96, 70, 44, 255)
+WOOD_D = Color(60, 42, 26, 255)
+FIRE_C = Color(255, 150, 40, 190)
+EMBER_C = Color(255, 220, 120, 220)
+STONE_C = Color(90, 90, 96, 255)
+
+
+def draw_battery(b, tm):
+    bob = math.sin(tm * 2.5 + b["x"]) * 0.06
+    rl.draw_cube(V3(b["x"], 0.35 + bob, b["z"]), 0.22, 0.42, 0.22, BATT_C)
+    rl.draw_cube(V3(b["x"], 0.58 + bob, b["z"]), 0.08, 0.06, 0.08, Color(200, 200, 200, 255))
+
+
+def draw_cabin(cx, cz):
+    rl.draw_cube(V3(cx, 1.1, cz), 5.2, 2.2, 4.2, WOOD_C)
+    rl.draw_cube(V3(cx, 2.5, cz), 5.8, 0.25, 4.8, WOOD_D)
+    rl.draw_cube(V3(cx, 0.9, cz + 2.12), 1.2, 1.8, 0.1, Color(12, 12, 14, 255))
+    rl.draw_cube(V3(cx - 1.6, 1.3, cz + 2.12), 0.5, 0.5, 0.08, Color(255, 190, 90, 190))
+    rl.draw_cube(V3(cx + 1.6, 1.3, cz + 2.12), 0.5, 0.5, 0.08, Color(255, 190, 90, 190))
+
+
+def draw_campfire(fx, fz, tm):
+    for k in range(6):
+        a = k * math.tau / 6
+        rl.draw_cube(V3(fx + math.cos(a) * 0.7, 0.12, fz + math.sin(a) * 0.7), 0.35, 0.25, 0.35, STONE_C)
+    fl = 0.5 + 0.5 * math.sin(tm * 11.0) * math.sin(tm * 5.3 + 1.0)
+    rl.draw_cube(V3(fx, 0.25, fz), 0.5, 0.2, 0.5, WOOD_D)
+    rl.draw_cube(V3(fx, 0.55 + fl * 0.08, fz), 0.34, 0.6 + fl * 0.15, 0.34, FIRE_C)
+    rl.draw_cube(V3(fx, 0.6, fz), 0.16, 0.5, 0.16, EMBER_C)
+
+
+FACE_GLOW = Color(228, 228, 218, 175)   # alpha<1 => shader emissive: karanlikta parlar
+SOCK_C = Color(2, 2, 4, 255)
+
+
 def draw_slender(sx, sz, px, pz, tm, fear):
     ang = math.degrees(math.atan2(px - sx, pz - sz))
     rl.rl_push_matrix()
     rl.rl_translatef(sx, 0.0, sz)
     rl.rl_rotatef(ang, 0, 1, 0)
     sw = math.sin(tm * 1.7)
-    rl.draw_cube(V3(-0.17, 0.8, 0), 0.26, 1.6, 0.3, SUIT_C)                    # bacaklar
-    rl.draw_cube(V3(0.17, 0.8, 0), 0.26, 1.6, 0.3, SUIT_C)
-    rl.draw_cube(V3(0, 2.15, 0), 0.74, 1.35, 0.36, SUIT_C)                     # gövde
-    rl.draw_cube(V3(0, 2.3, 0.19), 0.2, 1.0, 0.02, WHITE_C)                    # gömlek
-    rl.draw_cube(V3(0, 2.2, 0.205), 0.1, 0.8, 0.02, RED_C)                     # kırmızı kravat
-    rl.draw_cube(V3(0, 2.95, 0), 0.16, 0.2, 0.16, WHITE_C)                     # boyun
-    rl.draw_cube(V3(0, 3.2, 0), 0.38, 0.52, 0.38, WHITE_C)                     # yüzsüz kafa
-    for sx_ in (-1, 1):                                                         # upuzun kollar
+    breathe = math.sin(tm * 0.9) * 0.03
+    rl.draw_cube(V3(-0.15, 0.85, 0), 0.22, 1.7, 0.26, SUIT_C)                  # ince uzun bacaklar
+    rl.draw_cube(V3(0.15, 0.85, 0), 0.22, 1.7, 0.26, SUIT_C)
+    rl.draw_cube(V3(0, 2.25, 0), 0.62, 1.45, 0.32, SUIT_C)                     # dar govde
+    rl.draw_cube(V3(0, 2.32, 0.17), 0.18, 1.05, 0.02, WHITE_C)                 # gomlek
+    rl.draw_cube(V3(0, 2.24, 0.185), 0.09, 0.85, 0.02, RED_C)                  # kirmizi kravat
+    rl.draw_cube(V3(0, 2.62, 0.17), 0.20, 0.10, 0.02, WHITE_C)                 # mendil
+    rl.draw_cube(V3(0, 3.08 + breathe, 0), 0.14, 0.22, 0.14, SUIT_C)           # boyun
+    rl.draw_cube(V3(0, 3.42 + breathe, 0), 0.34, 0.50, 0.34, FACE_GLOW)        # solgun parlayan kafa
+    for ex in (-1, 1):                                                          # goz cukurlari
+        rl.draw_cube(V3(ex * 0.09, 3.48 + breathe, 0.165), 0.07, 0.09, 0.02, SOCK_C)
+    for sx_ in (-1, 1):                                                         # dizlere inen kollar
         rl.rl_push_matrix()
-        rl.rl_translatef(sx_ * 0.46, 2.7, 0)
-        rl.rl_rotatef(sx_ * (4 + 3 * sw), 0, 0, 1)
-        rl.draw_cube(V3(sx_ * 0.04, -1.0, 0), 0.12, 2.1, 0.12, SUIT_C)
-        rl.draw_cube(V3(sx_ * 0.04, -2.1, 0), 0.1, 0.35, 0.1, WHITE_C)
+        rl.rl_translatef(sx_ * 0.40, 2.85, 0)
+        rl.rl_rotatef(sx_ * (3 + 2.5 * sw), 0, 0, 1)
+        rl.draw_cube(V3(sx_ * 0.03, -1.15, 0), 0.10, 2.3, 0.10, SUIT_C)
+        for f in range(3):                                                      # uzun parmaklar
+            rl.draw_cube(V3(sx_ * (0.03 + (f - 1) * 0.05), -2.35, 0.02), 0.035, 0.30, 0.035, WHITE_C)
         rl.rl_pop_matrix()
-    for k in range(4):                                                          # sırttaki dokunaçlar
-        a = (k - 1.5) * 0.7
-        w = math.sin(tm * 2.0 + k) * (0.25 + fear * 0.5)
-        rl.draw_cylinder_ex(V3(0, 2.6, -0.2), V3(math.sin(a) * 1.8 + w, 3.3 + 0.3 * math.cos(tm + k), -1.5),
-                            0.06, 0.015, 3, SUIT_C)
+    nten = 4 + (2 if fear > 0.45 else 0)
+    for k in range(nten):                                                       # korkuyla cogalan dokunaclar
+        a = (k - (nten - 1) / 2) * 0.62
+        w = math.sin(tm * (2.0 + fear * 1.5) + k * 1.7) * (0.25 + fear * 0.6)
+        rl.draw_cylinder_ex(V3(0, 2.7, -0.18), V3(math.sin(a) * (1.6 + fear) + w, 3.5 + 0.35 * math.cos(tm + k), -1.6),
+                            0.055, 0.012, 3, SUIT_C)
     rl.rl_pop_matrix()
 
 
@@ -550,6 +617,26 @@ class Game:
         self.got = 0
         self.note, self.note_t = [], 0.0
         self.prompt = None
+        self.prompt_kind = ""
+        # etkilesim: piller, kulube, kamp atesi, araba bagaji
+        cand = [t for t in TREES if 15 < math.hypot(t[0] - 4, t[1] - 14) < 70]
+        random.shuffle(cand)
+        self.batteries, bspacing = [], 24.0
+        while len(self.batteries) < 5:
+            self.batteries = []
+            for t in cand:
+                a = random.uniform(0, 2 * math.pi)
+                b = dict(x=t[0] + math.cos(a) * (t[3] + 0.9), z=t[1] + math.sin(a) * (t[3] + 0.9), got=False)
+                if all(math.hypot(b["x"] - c["x"], b["z"] - c["z"]) > bspacing for c in self.batteries):
+                    self.batteries.append(b)
+                    if len(self.batteries) >= 5:
+                        break
+            bspacing -= 2
+        self.batt = 0
+        self.cabin = dict(x=-22.0, z=-8.0, read=False)
+        self.fire = dict(x=12.0, z=-24.0)
+        self.car_looted = False
+        EXTRA_BLOCK[:] = [(self.cabin["x"], self.cabin["z"], 3.2), (self.fire["x"], self.fire["z"], 1.0)]
         self.fear = 0.0
         self.vfear = 0.0
         self.sl = dict(on=False, x=0.0, z=0.0, tp=0.0, seen=False)
@@ -682,33 +769,71 @@ class Game:
             if stp != self.last_step:
                 self.last_step = stp
                 sfx(self.snd, "step", 0.35, random.uniform(0.8, 1.1))
-        # fener
+        # fener (piller titremeyi azalttir)
         if rl.is_key_pressed(rl.KEY_F):
             self.torch_on = not self.torch_on
         fl = 1.0
-        if self.fear > 0.25 and random.random() < self.fear * 0.25:
+        flick = self.fear * 0.25 * max(0.3, 1.0 - 0.12 * self.batt)
+        if self.fear > 0.25 and random.random() < flick:
             fl = random.uniform(0.0, 0.4)
         self.torch = (1.0 if self.torch_on else 0.0) * fl
-        # kağıtlar
-        self.prompt = None
+        # kamp atesi yakininda gundesin
+        near_fire = math.hypot(self.fire["x"] - self.px, self.fire["z"] - self.pz) < 5.0
+        self.near_fire = near_fire
+        # etkilesim onceligi: kagit > pil > kulube > araba
+        self.prompt, self.prompt_kind = None, ""
         for p in self.pages:
             if p["got"]:
                 continue
             dx, dz = p["x"] - self.px, p["z"] - self.pz
             d = math.hypot(dx, dz)
             if d < 3.2 and math.acos(clamp((dx * fx + dz * fz) / (d or 1), -1, 1)) < 0.6:
-                self.prompt = p
-        if self.prompt and rl.is_key_pressed(rl.KEY_E):
-            self.prompt["got"] = True
-            self.got += 1
-            self.note, self.note_t = PAGE_TEXTS[self.got - 1], 5.0
-            sfx(self.snd, "pick", 0.8)
-            self.fear += 0.08
-            self.sl_wait = min(self.sl_wait, 3.0)
-            if self.got >= 8:
-                self.begin_ending()
-                return
+                self.prompt, self.prompt_kind = p, "page"
+        if self.prompt is None:
+            for b in self.batteries:
+                if b["got"]:
+                    continue
+                if math.hypot(b["x"] - self.px, b["z"] - self.pz) < 2.6:
+                    self.prompt, self.prompt_kind = b, "batt"
+                    break
+        if self.prompt is None and not self.cabin["read"]:
+            if math.hypot(self.cabin["x"] - self.px, self.cabin["z"] - self.pz) < 4.5:
+                self.prompt, self.prompt_kind = self.cabin, "cabin"
+        if self.prompt is None and not self.car_looted:
+            if math.hypot(0.0 - self.px, 10.0 - self.pz) < 4.0:
+                self.prompt, self.prompt_kind = None, "car"
+                self.prompt = dict(x=0.0, z=10.0)
+        if self.prompt_kind and rl.is_key_pressed(rl.KEY_E):
+            if self.prompt_kind == "page":
+                self.prompt["got"] = True
+                self.got += 1
+                self.note, self.note_t = PAGE_TEXTS[self.got - 1], 5.0
+                sfx(self.snd, "pick", 0.8)
+                self.fear += 0.08
+                self.sl_wait = min(self.sl_wait, 3.0)
+                if self.got >= 8:
+                    self.begin_ending()
+                    return
+            elif self.prompt_kind == "batt":
+                self.prompt["got"] = True
+                self.batt += 1
+                self.fear = max(0.0, self.fear - 0.06)
+                self.note, self.note_t = ["Fener pili bulundu (%d/5)." % self.batt, "Fener daha sabit yanacak."], 4.0
+                sfx(self.snd, "pick", 1.1)
+            elif self.prompt_kind == "cabin":
+                self.cabin["read"] = True
+                self.note, self.note_t = CABIN_NOTE, 7.0
+                self.fear = min(1.4, self.fear + 0.10)
+                sfx(self.snd, "sting", 0.5)
+            elif self.prompt_kind == "car":
+                self.car_looted = True
+                self.batt += 1
+                self.note, self.note_t = CAR_NOTE, 6.0
+                sfx(self.snd, "pick", 1.0)
         self.note_t = max(0.0, self.note_t - dt)
+        if near_fire:
+            self.fear = max(0.0, self.fear - dt * 0.25)
+            self.stamina = clamp(self.stamina + dt * 0.15, 0, 1)
         d = self.update_slender(dt, fx, fz)
         self.audio_play(d)
         if self.state != "play":
@@ -752,6 +877,8 @@ class Game:
             self.fear = max(0.0, self.fear - dt * 0.12)
             if d > 2.4:
                 sp = 1.1 + 0.35 * self.got
+                if math.hypot(s["x"] - 12.0, s["z"] + 24.0) < 6.0:
+                    sp *= 0.4  # kamp atesi onu yavaslatir
                 s["x"] -= dx / d * sp * dt
                 s["z"] -= dz / d * sp * dt
         s["tp"] -= dt
@@ -856,6 +983,9 @@ class Game:
         elif st == "play":
             rl.draw_rectangle(RW // 2 - 1, RH // 2 - 1, 2, 2, Color(255, 255, 255, 110))
             self.txt("KAĞIT %d/8" % self.got, 6, 6)
+            self.txt("PIL %d/5" % self.batt, 6, 18)
+            if getattr(self, "near_fire", False):
+                self.txt("KAMP: GUVENDESIN", 6, 30, 10, (255, 190, 90))
             rl.draw_rectangle(6, RH - 12, 40, 3, Color(40, 40, 40, 255))
             rl.draw_rectangle(6, RH - 12, int(40 * self.stamina), 3, Color(200, 200, 200, 255))
             if self.play_t < 14:
@@ -863,8 +993,17 @@ class Game:
                 self.txt("Yardım edecek birini bul.", RW // 2, RH - 52, 10, (255, 220, 160), a, True)
                 self.txt("Ağaçlardaki kağıtlar sana yol gösterecek.", RW // 2, RH - 40, 10, (255, 220, 160), a, True)
                 self.txt("WASD yürü  SHIFT koş  F fener  E topla", RW // 2, RH - 24, 10, (170, 170, 170), a, True)
-            if self.prompt:
+            elif self.play_t < 22:
+                a = int(255 * clamp((22 - self.play_t) / 3, 0, 1))
+                self.txt(OBJECTIVES[min(self.got, 8)], RW // 2, RH - 24, 10, (255, 220, 160), a, True)
+            if self.prompt_kind == "page":
                 self.txt("[E] Kağıdı topla", RW // 2, RH // 2 + 14, 10, (255, 255, 255), 255, True)
+            elif self.prompt_kind == "batt":
+                self.txt("[E] Pili al", RW // 2, RH // 2 + 14, 10, (255, 255, 255), 255, True)
+            elif self.prompt_kind == "cabin":
+                self.txt("[E] Günlüğü oku", RW // 2, RH // 2 + 14, 10, (255, 255, 255), 255, True)
+            elif self.prompt_kind == "car":
+                self.txt("[E] Bagajı karıştır", RW // 2, RH // 2 + 14, 10, (255, 255, 255), 255, True)
             if self.note_t > 0:
                 a = int(255 * clamp(self.note_t, 0, 1))
                 y0 = RH // 2 - 48
@@ -950,6 +1089,13 @@ class Game:
         for pg in self.pages:
             if not pg["got"] and math.hypot(pg["x"] - p.x, pg["z"] - p.z) < far:
                 draw_page(pg)
+        for b in self.batteries:
+            if not b["got"] and math.hypot(b["x"] - p.x, b["z"] - p.z) < far:
+                draw_battery(b, self.time)
+        if math.hypot(self.cabin["x"] - p.x, self.cabin["z"] - p.z) < far:
+            draw_cabin(self.cabin["x"], self.cabin["z"])
+        if math.hypot(self.fire["x"] - p.x, self.fire["z"] - p.z) < far:
+            draw_campfire(self.fire["x"], self.fire["z"], self.time)
         for sm in self.smoke:
             s = 0.25 + sm[3] * 0.35
             rl.draw_cube(V3(sm[0], sm[1], sm[2]), s, s, s, Color(70, 70, 74, 255))

@@ -4,9 +4,11 @@ from pyray import *
 
 import hud
 import icons
+import menu
 import playerdata
 import render
 import skins
+import ui
 from config import C, SH, SW, cfg
 from match import update_play
 from state import g
@@ -51,8 +53,7 @@ def main():
         render.draw_post()
         begin_mode_2d(render.ui_camera())
         if st == "main":
-            draw_rectangle(0, 0, SW, SH, C(0, 0, 0, 90))
-            hud.screen_main()
+            menu.screen_main()
         elif st == "char":
             hud.screen_char()
         elif st == "setup":
@@ -74,6 +75,8 @@ def main():
                 hud.pause_ui()
         elif st == "end":
             hud.screen_end()
+        if st != "play":
+            ui.cursor_glow()
         end_mode_2d()
         end_drawing()
         if st != "setup" and g.edit != -1 and g.state != "setup":

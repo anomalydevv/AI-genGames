@@ -19,17 +19,17 @@ from config import C, cfg, cl, lerpf
 
 KNIFE_RIG = {
     "knife": dict(pos=(-0.30, -0.22, 0.66), scale=0.62, roll=0.52,
-                  pivot=(0.0, -0.010, -0.130), hand=0.00,
+                  pivot=(0.0, -0.010, -0.130), hand=0.18,
                   insp=(-0.14, -0.03, 0.84), iscale=0.62,
                   arm_side=-1.0, arm_offset=(-0.22, -0.34, -0.13),
                   arm_length=1.10, thumb_side=1.0, thumb_angle=0.65),
-    "karambit": dict(pos=(-0.30, -0.23, 0.66), scale=0.55, roll=0.58,
-                     pivot=(0.0, -0.030, -0.370), hand=0.09,
-                     insp=(-0.12, -0.02, 0.88), iscale=0.52,
+    "karambit": dict(pos=(-0.20, -0.10, 0.58), scale=0.54, roll=-0.42,
+                     pivot=(0.0, -0.030, -0.370), hand=0.24,
+                     insp=(-0.08, 0.02, 0.80), iscale=0.55,
                      arm_side=-1.0, arm_offset=(-0.22, -0.34, -0.13),
                      arm_length=1.10, thumb_side=1.0, thumb_angle=0.65),
     "butterfly": dict(pos=(-0.30, -0.22, 0.66), scale=0.62, roll=0.55,
-                      pivot=(0.0, -0.005, 0.030), hand=0.01,
+                      pivot=(0.0, -0.005, 0.030), hand=0.16,
                       insp=(-0.14, -0.08, 0.78), iscale=0.70,
                       arm_side=-1.0, arm_offset=(-0.22, -0.34, -0.13),
                       arm_length=1.10, thumb_side=1.0, thumb_angle=0.65),
@@ -149,13 +149,23 @@ def update_slash(p, dt):
 
 
 # Butterfly inspect koreografisi: (bitis_zamani, A_hedef, B_hedef)
+# Detayli koreografi: tek kanat fiskeleri, cift kanat acilimi, hizli
+# kelebek cirpinisi ve toparlanma; her gecis yay fizigi ile yumusatilir.
 _BUTTERFLY_SEQ = (
-    (0.5, _HINGE_OPEN, 0.0),
-    (1.0, 0.0, 0.0),
-    (1.5, 0.0, _HINGE_OPEN),
-    (2.0, 0.0, 0.0),
-    (2.4, _HINGE_OPEN, 0.0),
-    (2.8, 0.0, 0.0),
+    (0.34, _HINGE_OPEN, 0.0),
+    (0.60, 0.0, 0.0),
+    (0.90, _HINGE_OPEN, _HINGE_OPEN * 0.42),
+    (1.22, _HINGE_OPEN, 0.0),
+    (1.52, 0.0, _HINGE_OPEN),
+    (1.82, 0.0, 0.0),
+    (2.02, _HINGE_OPEN, 0.0),
+    (2.20, 0.0, 0.34),
+    (2.40, _HINGE_OPEN, 0.0),
+    (2.58, 0.0, 0.0),
+    (2.86, _HINGE_OPEN, _HINGE_OPEN),
+    (3.10, 0.0, 0.0),
+    (3.28, _HINGE_OPEN * 0.55, _HINGE_OPEN * 0.55),
+    (3.46, 0.0, 0.0),
 )
 _BUTTERFLY_LOOP = 3.6
 
@@ -174,6 +184,12 @@ def update(p, dt):
     p.inspect_out = max(0.0, p.inspect_out - dt)
     if p.knife_active and p.knife == "butterfly":
         ta, tb = _butterfly_targets(p.inspect_t) if p.inspect else (0.0, 0.0)
+        # mikro cirpinti: acik kanatta canli kelebek hissi
+        if p.inspect:
+            flutter = math.sin(p.inspect_t * 26.0) * 0.045
+            flutter2 = math.sin(p.inspect_t * 31.0 + 1.1) * 0.038
+            ta = cl(ta + flutter, _HINGE_MIN, _HINGE_MAX)
+            tb = cl(tb + flutter2, _HINGE_MIN, _HINGE_MAX)
         a, p.hinge_v = _spring_step(p.hinge_a, p.hinge_v, ta,
                                     _HINGE_STIFFNESS, _HINGE_DAMPING_RATIO, dt)
         b, p.hinge_bv = _spring_step(p.hinge_b, p.hinge_bv, tb,
@@ -189,7 +205,13 @@ def update(p, dt):
 # Slash animasyonu
 # ----------------------------------------------------------------------------
 def knife_base(kid):
-    return _mm(_rz(KNIFE_RIG[kid]["roll"]), _ry(math.pi * 0.5))
+    rig = KNIFE_RIG[kid]
+    base = _mm(_rz(rig["roll"]), _ry(math.pi * 0.5))
+    if kid == "karambit":
+        # Gercekci ters tutus: yumruk kapali, bicak avuc icinden asagi-ileri
+        # uzar; bilek dogal acida, namlu hafif one yatik.
+        base = _mm(_mm(base, _rx(0.62)), _ry(-0.08))
+    return base
 
 
 def _slash_curve(u):
@@ -214,10 +236,11 @@ def slash_pose(kid, progress):
         rotation = _mm(_rz(-swing * 1.15),
                        _mm(_ry(swing * 0.35), _rx(swing * 0.18)))
     elif kid == "karambit":
-        spin_k = _smoother((progress - _WINDUP_END * 0.6) / 0.80)
-        spin = spin_k * math.tau - windup * 0.30
-        rotation = _mm(_rz(-spin),
-                       _mm(_ry(swing * 0.55), _rx(swing * 0.10)))
+        # Gercekci karambit: tam tur spin yok, bilekten kisa cekis + genis kavis.
+        snap_k = _ease_out_cubic((progress - _WINDUP_END * 0.6) / 0.80)
+        snap = snap_k * 1.9 - windup * 0.30
+        rotation = _mm(_rz(-snap - swing * 0.55),
+                       _mm(_ry(swing * 0.55 + snap * 0.25), _rx(swing * 0.10)))
     else:
         rotation = _mm(_rz(-swing * 1.45),
                        _mm(_ry(swing * 0.45), _rx(swing * 0.16)))
@@ -254,8 +277,8 @@ _INSPECT_MOTION = {
     "karambit": dict(yaw=(0.58, 0.78, 0.0), pitch=(0.22, 1.45, 0.6),
                      roll=((0.78, 0.56, 0.3), (0.16, 2.25, 0.0)),
                      bob=((0.014, 1.1), (0.022, 1.8), (0.012, 1.35, True))),
-    "butterfly": dict(yaw=(0.42, 0.84, 0.0), pitch=(0.18, 1.3, 0.4),
-                      roll=((0.38, 1.05, 0.0), (0.14, 2.6, 0.0)),
+    "butterfly": dict(yaw=(0.52, 0.84, 0.0), pitch=(0.20, 1.3, 0.4),
+                      roll=((0.40, 1.05, 0.0), (0.16, 2.6, 0.0), (0.09, 4.7, 1.2)),
                       bob=((0.018, 0.9), (0.020, 1.6), (0.010, 1.1))),
     "knife": dict(yaw=(0.32, 0.9, 0.0), pitch=(0.14, 1.5, 0.0),
                   roll=((0.45, 0.7, 0.0),),
@@ -301,6 +324,16 @@ def knife_pose(p, kid):
     yaw, pitch, roll, bob_v = _inspect_motion(kid, p.inspect_t)
     rotation = _mm(_rz(roll * inspect),
                    _mm(_rx(pitch * inspect), _ry(yaw * inspect)))
+    skin = getattr(p, "knife_skin", "none")
+    if skin in (None, "", "none"):
+        # Skinsiz bicaklar: yavas baslayip hizlanan, tam hizda uc dumani
+        # cikaran donus. Ilk saniyeler elde tutulur, sonra firlatilir.
+        sang, _ = spin_state(kid, p.inspect_t)
+        sang *= inspect
+        if kid == "karambit":
+            rotation = _mm(_mm(_rz(sang * 0.16), _ry(sang)), rotation)
+        else:
+            rotation = _mm(_ry(sang * 0.72), rotation)
     ix, iy, iz = rig["insp"]
     inspected = (ix + bob_v[0], iy + bob_v[1], iz + bob_v[2])
     base = tuple(lerpf(neutral[i], inspected[i], inspect) for i in range(3))
@@ -433,6 +466,261 @@ def _fx_rising_motes(base, scale, t, inspect, accent):
         # fade-in + fade-out (daha yumusak dogus/olus)
         env = math.sin(life * math.pi)
         _cube(x, y, z, 0.010 * scale, accent, 150 * env * inspect)
+
+
+# ----------------------------------------------------------------------------
+# Void Tasi: bicagi gruplar halinde atom yorungesine al
+# ----------------------------------------------------------------------------
+_ORBIT_T = 0.16
+_GROUP_CACHE = {}
+
+
+def _connected_groups(parts, kid, bands=4):
+    """Temas eden bicak parcalarini ayni grupta tut; kirilma cizgileriyle bol.
+
+    Parcalar eksen hizali kutular olarak komsuluk/overlap ile birlesir. Ayni
+    govdeye bagli parcalar tek parca kalir; govde boyunca 4 zayif kirilma
+    hattinda buyuk gruplar ayrilir. Boylece gercek bir bicak gibi 4-6 toplu
+    parca olusur, tek tek toz olmaz.
+    """
+    key = (kid, len(parts), tuple(round(p[2], 4) for p in parts[::7]))
+    if key in _GROUP_CACHE:
+        return _GROUP_CACHE[key]
+    n = len(parts)
+    par = list(range(n))
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+
+    def uni(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            par[rb] = ra
+
+    eps = 0.010
+    for i in range(n):
+        xi, yi, zi, sxi, syi, szi = parts[i][:6]
+        a = (xi - sxi / 2 - eps, yi - syi / 2 - eps, zi - szi / 2 - eps,
+             xi + sxi / 2 + eps, yi + syi / 2 + eps, zi + szi / 2 + eps)
+        for j in range(i + 1, n):
+            xj, yj, zj, sxj, syj, szj = parts[j][:6]
+            if (min(a[3], xj + sxj / 2) - max(a[0], xj - sxj / 2) > 0 and
+                    min(a[4], yj + syj / 2) - max(a[1], yj - syj / 2) > 0 and
+                    min(a[5], zj + szj / 2) - max(a[2], zj - szj / 2) > 0):
+                uni(i, j)
+
+    zs = [p[2] for p in parts]
+    zlo, zhi = min(zs), max(zs)
+    span = max(1e-4, zhi - zlo)
+    keys = {}
+    groups = []
+    for i in range(n):
+        band = min(bands - 1, max(0, int((parts[i][2] - zlo) / span * bands)))
+        k = (find(i), band)
+        if k not in keys:
+            keys[k] = len(keys)
+        groups.append(keys[k])
+    _GROUP_CACHE[key] = groups
+    return groups
+
+
+def group_shatter(parts, pivot, kid, t, k, scale):
+    """Parcalari bagli gruplar halinde elin ustunde atomik yorungede dondurur."""
+    k = cl(k, 0.0, 1.0)
+    groups = _connected_groups(parts, kid)
+    n = max(groups) + 1
+    sums = [[0.0, 0.0, 0.0, 0] for _ in range(n)]
+    for i, p in enumerate(parts):
+        g = groups[i]
+        sums[g][0] += (p[0] - pivot[0]) * scale
+        sums[g][1] += (p[1] - pivot[1]) * scale
+        sums[g][2] += (p[2] - pivot[2]) * scale
+        sums[g][3] += 1
+    centers = []
+    for s in sums:
+        c = max(1, s[3])
+        centers.append((s[0] / c, s[1] / c, s[2] / c))
+
+    def orbit(gi, tt):
+        ph = gi * 1.91
+        rad = (0.15 + 0.026 * (gi % 6)) * scale * (0.30 + 0.70 * k)
+        ang = tt * (1.35 + 0.22 * (gi % 5)) + ph
+        return (math.cos(ang) * rad,
+                0.13 * scale + math.sin(ang * 1.27 + ph) * rad * 0.55,
+                math.sin(ang) * rad - 0.03 * scale)
+
+    targets = [orbit(gi, t) for gi in range(n)]
+    offsets = []
+    for i in range(len(parts)):
+        gi = groups[i]
+        c = centers[gi]
+        tg = targets[gi]
+        offsets.append((tg[0] - c[0], tg[1] - c[1], tg[2] - c[2]))
+    return offsets, groups, targets
+
+
+def draw_atom_trails(base, R, scale, t, k, n=6):
+    """Grup yorungelerinin izlerini ve elektron/proton parlamalarini cizer."""
+    if k <= 0.01:
+        return
+    violet = C(150, 70, 255)
+    cyan = C(80, 225, 255)
+    hot = C(240, 230, 255)
+
+    def orbit(gi, tt):
+        ph = gi * 1.91
+        rad = (0.15 + 0.026 * (gi % 6)) * scale * (0.30 + 0.70 * k)
+        ang = tt * (1.35 + 0.22 * (gi % 5)) + ph
+        return (math.cos(ang) * rad,
+                0.13 * scale + math.sin(ang * 1.27 + ph) * rad * 0.55,
+                math.sin(ang) * rad - 0.03 * scale)
+
+    rl_disable_depth_test()
+    rl_disable_depth_mask()
+    begin_blend_mode(BLEND_ADDITIVE)
+    for gi in range(n):
+        segs = 16
+        prev = None
+        for j in range(segs + 1):
+            tt = t - j * 0.035
+            p = orbit(gi, tt)
+            wp = (base[0] + _mv(R, p)[0], base[1] + _mv(R, p)[1], base[2] + _mv(R, p)[2])
+            if prev is not None:
+                fade = 1.0 - j / float(segs)
+                draw_line_3d(Vector3(*prev), Vector3(*wp),
+                             _col(cyan if gi % 2 else violet, 120 * fade * k))
+            prev = wp
+        p = orbit(gi, t)
+        wp = (base[0] + _mv(R, p)[0], base[1] + _mv(R, p)[1], base[2] + _mv(R, p)[2])
+        pu = 0.5 + 0.5 * math.sin(t * 6.0 + gi * 1.7)
+        draw_cube(Vector3(*wp), 0.012 * scale * (0.8 + 0.4 * pu),
+                  0.012 * scale, 0.012 * scale, _col(hot, 200 * k))
+        draw_sphere(Vector3(*wp), (0.022 + 0.012 * pu) * scale,
+                    _col(violet if gi % 2 else cyan, 90 * k))
+    end_blend_mode()
+    rl_enable_depth_test()
+    rl_enable_depth_mask()
+
+
+# ----------------------------------------------------------------------------
+# Skinsiz bicak: Y incelemesinde hizlanan donus + uc dumani
+# ----------------------------------------------------------------------------
+_SPIN_T = 2.4
+_SPIN_MAX = 15.0
+
+
+def spin_state(kid, t):
+    """Donus acisi ve 0..1 hiz seviyesi (yavas baslar, tam hiza cikar)."""
+    base = 1.2 if kid == "karambit" else 0.85
+    if t < _SPIN_T:
+        u = t / _SPIN_T
+        rate = base + (_SPIN_MAX - base) * u * u
+        ang = base * t + (_SPIN_MAX - base) * t * u * u / 3.0
+    else:
+        rate = _SPIN_MAX
+        ang = base * _SPIN_T + (_SPIN_MAX - base) * _SPIN_T / 3.0 + _SPIN_MAX * (t - _SPIN_T)
+    level = cl((rate - base) / max(0.001, _SPIN_MAX - base), 0.0, 1.0)
+    return ang, level
+
+
+def draw_tip_smoke(tip, level, color, t, kid, k):
+    """Tam hizda bicak ucundan skine gore renkli duman + iz cikar."""
+    if level <= 0.55 or k <= 0.01:
+        return
+    inten = cl((level - 0.55) / 0.45, 0.0, 1.0) * k
+    hot = C(min(255, color.r + 70), min(255, color.g + 70), min(255, color.b + 70))
+    rl_disable_depth_test()
+    rl_disable_depth_mask()
+    begin_blend_mode(BLEND_ADDITIVE)
+    for i in range(26):
+        seed = (i * 0.7548776662) % 1.0
+        life = (t * (1.1 + seed * 0.7) + seed) % 1.0
+        ang = seed * math.tau + t * 1.6
+        spread = (0.012 + 0.085 * life) * (0.6 + 0.7 * seed)
+        px = tip[0] + math.cos(ang) * spread
+        py = tip[1] + life * 0.16 + math.sin(ang * 1.3) * spread * 0.5
+        pz = tip[2] + math.sin(ang) * spread
+        env = math.sin(life * math.pi)
+        r = (0.018 + 0.045 * life) * (0.7 + 0.5 * seed)
+        a = int(90 * env * inten)
+        draw_sphere(Vector3(px, py, pz), r, C(color.r, color.g, color.b, a))
+        if i % 4 == 0:
+            draw_sphere(Vector3(px, py, pz), r * 0.5, C(hot.r, hot.g, hot.b, int(a * 1.4)))
+    # uc isik cekirdegi
+    pu = 0.5 + 0.5 * math.sin(t * 12.0)
+    draw_sphere(Vector3(*tip), (0.02 + 0.012 * pu),
+                C(hot.r, hot.g, hot.b, int(110 * inten)))
+    draw_sphere(Vector3(*tip), (0.05 + 0.02 * pu),
+                C(color.r, color.g, color.b, int(40 * inten)))
+    end_blend_mode()
+    rl_enable_depth_test()
+    rl_enable_depth_mask()
+
+
+def tip_point(kid, base, R, pivot, scale):
+    tip = _knife_tip(kid)
+    d = _mv(R, ((tip[0] - pivot[0]) * scale,
+                (tip[1] - pivot[1]) * scale,
+                (tip[2] - pivot[2]) * scale))
+    return (base[0] + d[0], base[1] + d[1], base[2] + d[2])
+
+
+def draw_void_shatter_fx(base, scale, t, k):
+    """Parcalarin arasindan yayilan mor sis, isik cizgileri ve kivilcimlar."""
+    if k <= 0.01:
+        return
+    violet = C(150, 70, 255)
+    lilac = C(200, 140, 255)
+    cyan = C(80, 225, 255)
+    hot = C(240, 225, 255)
+    rl_disable_depth_test()
+    rl_disable_depth_mask()
+    begin_blend_mode(BLEND_ADDITIVE)
+    # hacimsel mor sis
+    for i in range(40):
+        seed = (i * 0.7548776662) % 1.0
+        ang = seed * math.tau + t * 0.35
+        rad = (0.055 + 0.16 * seed) * scale
+        px = base[0] + math.cos(ang) * rad
+        pz = base[2] + math.sin(ang) * rad
+        py = base[1] + math.sin(t * 0.8 + seed * 9.0) * 0.10 * scale
+        pu = 0.5 + 0.5 * math.sin(t * 1.8 + seed * 11.0)
+        r = (0.05 + 0.055 * pu) * scale
+        col = violet if i % 3 else lilac
+        draw_sphere(Vector3(px, py, pz), r, _col(col, 22 * k))
+    # yukselen kor parcalari
+    for i in range(26):
+        seed = (i * 0.5698402910) % 1.0
+        life = (t * 0.75 + seed) % 1.0
+        ang = seed * math.tau + t * (0.5 + seed)
+        rad = (0.045 + 0.12 * seed) * scale
+        px = base[0] + math.cos(ang) * rad
+        pz = base[2] + math.sin(ang) * rad
+        py = base[1] + (0.16 - life * 0.42) * scale
+        env = math.sin(life * math.pi)
+        s = (0.007 + 0.011 * env) * scale
+        draw_cube(Vector3(px, py, pz), s, s, s, _col(lilac if i % 4 else cyan, 180 * env * k))
+    # ic isin huzmeleri
+    for i in range(16):
+        seed = (i * 0.61803398875) % 1.0
+        ang = seed * math.tau - t * 1.1
+        r0 = (0.04 + 0.05 * seed) * scale
+        r1 = (0.11 + 0.16 * seed) * scale
+        p1 = Vector3(base[0] + math.cos(ang) * r0, base[1] + (seed - 0.5) * 0.10 * scale,
+                     base[2] + math.sin(ang) * r0)
+        p2 = Vector3(base[0] + math.cos(ang + 0.22) * r1, p1.y + 0.04 * scale,
+                     base[2] + math.sin(ang + 0.22) * r1)
+        draw_line_3d(p1, p2, _col(cyan if i % 3 else violet, 90 * k))
+    # merkez isik cekirdegi
+    pu = 0.5 + 0.5 * math.sin(t * 4.2)
+    draw_sphere(Vector3(*base), (0.045 + 0.03 * pu) * scale, _col(violet, 70 * k))
+    draw_sphere(Vector3(*base), (0.015 + 0.01 * pu) * scale, _col(hot, 110 * k))
+    end_blend_mode()
+    rl_enable_depth_test()
+    rl_enable_depth_mask()
 
 
 def draw_inspect_fx(p, kid, base, scale, inspect):
