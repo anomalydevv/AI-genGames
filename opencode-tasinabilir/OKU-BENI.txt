@@ -1,21 +1,24 @@
 TASINABILIR OPENCODE (admin gerekmez)
 
 ICINDEKILER:
-  run.bat       -> opencode'i baslatir (yoksa indirir, ilk acilista internet gerekir)
-  coz.bat       -> apikey.enc'yi cozup anahtari dogru yere yazar
+  run.bat       -> baslatir. EXE yoksa: once static\ parcalari birlestirir
+                   (internetsiz), o da yoksa indirir (internet gerekir).
+  coz.bat       -> apikey.enc'yi cozup anahtari yazar (.home + profil)
+  sil.bat       -> anahtari SILER (.home + profil). Okuldan cikarken calistir.
   apikey.enc    -> sifreli API anahtarlari (acik anahtar YOK)
+  static\       -> opencode.exe parcalari (internetsiz kurulum icin)
   opencode.json -> sade portable ayar
   AGENTS.md     -> calisma kurallari
   skills/       -> yardimci beceriler
 
 OKULDA KULLANIM:
-  1. Bu klasoru USB ile tasi.
-  2. Once coz.bat'i calistir, sana soyledigim parolayi yaz.
+  1. Bu klasoru USB ile tasi (ya da repodan cek).
+     USB'den calismazsa C:\Users\kendi-adin\Documents gibi bir yere kopyala.
+  2. coz.bat'i calistir, sana soyledigim parolayi yaz.
      (Parola bu repoda HICBIR yerde yazmaz.)
   3. run.bat ile baslat.
+  4. Cikarken sil.bat'i calistir, anahtar okulda kalmasin.
 
 NOTLAR:
   - Sifreli dosya herkese acik repoda durur; parolasiz acilmaz.
     Yine de parolayi kimseyle paylasma ve baska yerde kullanma.
-  - coz.bat anahtari SADECE bu bilgisayarin kullanici klasorune yazar,
-    repoya yazmaz.

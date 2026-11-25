@@ -1,4 +1,5 @@
 bin/
+.home/
 tmp/
 auth.json
 *.log

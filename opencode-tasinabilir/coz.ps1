@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# apikey.enc -> %USERPROFILE%\.local\share\opencode\auth.json
+# apikey.enc -> .home (portable ev) VE kullanici profili (yedek).
 # Parola klavyeden alinir, dosyaya/diska ASLA yazilmaz.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -26,7 +26,10 @@ try {
 } finally {
   if ($pw) { $pw = $null }
 }
-$dst = Join-Path $env:USERPROFILE ".local\share\opencode\auth.json"
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
-[IO.File]::WriteAllText($dst, $text, (New-Object Text.UTF8Encoding($false)))
-Write-Host "[coz] yazildi: $dst"
+$dst1 = Join-Path $root ".home\.local\share\opencode\auth.json"
+$dst2 = Join-Path $env:USERPROFILE ".local\share\opencode\auth.json"
+foreach ($dst in @($dst1, $dst2)) {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+  [IO.File]::WriteAllText($dst, $text, (New-Object Text.UTF8Encoding($false)))
+  Write-Host "[coz] yazildi: $dst"
+}
