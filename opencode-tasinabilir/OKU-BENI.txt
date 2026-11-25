@@ -1,0 +1,21 @@
+TASINABILIR OPENCODE (admin gerekmez)
+
+ICINDEKILER:
+  run.bat       -> opencode'i baslatir (yoksa indirir, ilk acilista internet gerekir)
+  coz.bat       -> apikey.enc'yi cozup anahtari dogru yere yazar
+  apikey.enc    -> sifreli API anahtarlari (acik anahtar YOK)
+  opencode.json -> sade portable ayar
+  AGENTS.md     -> calisma kurallari
+  skills/       -> yardimci beceriler
+
+OKULDA KULLANIM:
+  1. Bu klasoru USB ile tasi.
+  2. Once coz.bat'i calistir, sana soyledigim parolayi yaz.
+     (Parola bu repoda HICBIR yerde yazmaz.)
+  3. run.bat ile baslat.
+
+NOTLAR:
+  - Sifreli dosya herkese acik repoda durur; parolasiz acilmaz.
+    Yine de parolayi kimseyle paylasma ve baska yerde kullanma.
+  - coz.bat anahtari SADECE bu bilgisayarin kullanici klasorune yazar,
+    repoya yazmaz.

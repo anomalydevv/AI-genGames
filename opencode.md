@@ -46,6 +46,7 @@ dosyanin gorevi degistiginde burasi **guncellenmek zorundadir**.
 | `assets/fonts/` | Projeyle gelen font (Rajdhani); her bilgisayarda calisir. |
 | `assets/icons/` | `icons.py` tarafindan uretilen 3B silah/bicak fotograflari (PNG). |
 | `slenderman/main.py` | Bagimsiz PS1-tarzi Slenderman oyunu: 8 kagit, pil/kulube gunlugu/kamp-atesi/araba-bagaji etkilesimi, korkuyla cogalan dokunacli parlayan slender modeli, ateste guvenli alan. |
+| `opencode-tasinabilir/` | Adminsiz portable opencode paketi: `run.bat` (indir+baslat), `kur.ps1`, `coz.bat`/`coz.ps1` (parolayla `apikey.enc` cozer, parola repoda yok), sade `opencode.json`, `AGENTS.md`, `skills/`. |
 
 ## Bagimlilik Yonu
 
